@@ -1,0 +1,55 @@
+# Single config file with the two presets of spec Sec. 3.9.
+# Select with --preset local|hpc ; override any key with --set section.key=value
+# Shot noise (Sec. 2.5) is not implemented in v0.1.
+
+common:
+  data:
+    train: datasets/n8/train.h5
+    val: datasets/n8/val.h5
+    test: datasets/n8/test.h5
+    num_workers: 2
+    preload: true          # load the whole HDF5 split in RAM (set false for the 5 GB HPC set)
+  model:
+    head: A                # A = structured generator (default), B = free readout (ablation)
+    conv_kernel: 4
+    rope: true
+    basis_std: 0.02
+    bf16: true             # bf16 autocast for the body on CUDA; head always float32
+    checkpointing: false
+  loss:
+    lambda_phys: 0.1
+    lambda_probe: 1.0
+    lambda_theta: 1.0e-4
+    w_k: uniform           # uniform | linear  (w_k proportional to k, normalised to mean 1)
+  optim:
+    lr: 3.0e-4
+    lr_min: 3.0e-5
+    betas: [0.9, 0.95]
+    weight_decay: 0.01
+    warmup: 2000
+    grad_clip: 1.0
+  train:
+    min_anchor: 8
+    eval_every: 5000
+    eval_T: [8, 16, 32, 64]  # context lengths used for quick validation
+    eval_batches: 10
+    log_every: 50
+    ckpt_every: 5000
+    out_dir: runs/default
+    seed: 0
+
+presets:
+  local:
+    model: {d: 128, de: 32, nh: 4, L: 3, m: 32, K: 32}
+    train: {n: 8, T_min: 8, T_max: 64, H: 16, anchors: 2, batch_size: 8, steps: 20000}
+
+  hpc:
+    data:
+      train: datasets/n10/train.h5
+      val: datasets/n10/val.h5
+      test: datasets/n10/test.h5
+      num_workers: 8
+      preload: false
+    model: {d: 256, de: 64, nh: 8, L: 6, m: 64, K: 64}
+    train: {n: 10, T_min: 16, T_max: 128, H: 32, anchors: 4, batch_size: 32, steps: 150000,
+            eval_T: [8, 16, 32, 64, 128]}
