@@ -5,7 +5,8 @@
         --data datasets/n8/test.h5 --ckpt runs/local_A/last.pt \
         --T 32 --horizon 64 --sample 0 --out dashboard_data.json
 
-Then open the dashboard and press "Load dashboard_data.json".
+Then open the dashboard and press "Carica dashboard_data.json", or publish it on GitHub Pages
+with tools.publish_dashboard.
 
 What is exported
   * runs/<name>/config.json + log.jsonl       -> config, parameter count, train/val curves
@@ -227,8 +228,8 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
     return s
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+def add_export_args(ap: argparse.ArgumentParser) -> None:
+    """Arguments selecting what goes into the export (shared with tools.publish_dashboard)."""
     ap.add_argument("--runs", default="runs")
     ap.add_argument("--results", default="results")
     ap.add_argument("--data", nargs="*", default=[], help="HDF5 files; the first is used for the sample")
@@ -237,18 +238,30 @@ def main():
     ap.add_argument("--horizon", type=int, default=64)
     ap.add_argument("--sample", type=int, default=0)
     ap.add_argument("--baselines", nargs="*", default=["persistence", "dmd", "dmd4", "oracle", "hl_oracle"])
-    ap.add_argument("--notes", default="", help="free text shown on the dashboard")
-    ap.add_argument("--out", default="dashboard_data.json")
-    a = ap.parse_args()
+
+
+def build_export(a: argparse.Namespace, notes: str = "") -> dict:
+    """Runs, results, datasets and the sample rollout selected by add_export_args, as the
+    JSON-ready dict of the dashboard (schema hbicp-dashboard/1)."""
     out = dict(schema="hbicp-dashboard/1", generated_at=_dt.datetime.now().isoformat(timespec="seconds"),
-               git_commit=git_commit(), notes=a.notes,
+               git_commit=git_commit(), notes=notes,
                runs=load_runs(a.runs) if os.path.isdir(a.runs) else [],
                results=load_results(a.results) if os.path.isdir(a.results) else [],
                datasets=[dataset_info(p) for p in a.data if os.path.exists(p)])
     if a.data and os.path.exists(a.data[0]):
         out["sample"] = sample_block(a.data[0], a.sample, a.T, a.horizon, a.ckpt, a.baselines)
+    return _clean(out)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    add_export_args(ap)
+    ap.add_argument("--notes", default="", help="free text shown on the dashboard")
+    ap.add_argument("--out", default="dashboard_data.json")
+    a = ap.parse_args()
+    out = build_export(a, a.notes)
     with open(a.out, "w") as f:
-        json.dump(_clean(out), f, separators=(",", ":"))
+        json.dump(out, f, separators=(",", ":"))
     print(f"wrote {a.out} ({os.path.getsize(a.out) / 1e6:.2f} MB): {len(out['runs'])} runs, "
           f"{len(out['results'])} result sets, {len(out['datasets'])} datasets")
 
