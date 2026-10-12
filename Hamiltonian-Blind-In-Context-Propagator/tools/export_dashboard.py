@@ -54,6 +54,34 @@ def _clean(o):
 
 
 # ----------------------------------------------------------------------------------------
+# (regex on the state_dict key, group id). First match wins. Groups follow the node / pair paths of
+# the body so the dashboard can show where the capacity sits.
+_GROUPS = [
+    (r"^body\.embed\.mlp_n", "embed_node"),
+    (r"^body\.embed\.mlp_e", "embed_pair"),
+    (r"^body\.blocks\.\d+\.spatial\.(w_b|w_ev)", "spatial_pair_to_node"),
+    (r"^body\.blocks\.\d+\.spatial\.(ln_h2|ln_e2|w_a|w_bb|mlp_eu)", "spatial_pair_update"),
+    (r"^body\.blocks\.\d+\.spatial\.", "spatial_node"),
+    (r"^body\.blocks\.\d+\.temporal\.(conv|ln_e)", "temporal_pair"),
+    (r"^body\.blocks\.\d+\.temporal\.", "temporal_node"),
+    (r"^body\.ln_h", "final_ln_node"),
+    (r"^body\.ln_e", "final_ln_pair"),
+    (r"^head\.(w_g|w_A)", "head_pair"),
+    (r"^head\.", "head_node_and_generator"),
+    (r"^probe\.", "probe"),
+]
+
+
+def param_groups(sd) -> dict:
+    """Number of parameters of a state_dict per functional group (see _GROUPS)."""
+    import re
+    out: dict[str, int] = {}
+    for k, v in sd.items():
+        g = next((g for pat, g in _GROUPS if re.match(pat, k)), "other")
+        out[g] = out.get(g, 0) + int(v.numel())
+    return out
+
+
 def load_runs(root: str, max_points: int = 400) -> list[dict]:
     runs = []
     for cfg_path in sorted(glob.glob(os.path.join(root, "*", "config.json"))):
@@ -73,16 +101,17 @@ def load_runs(root: str, max_points: int = 400) -> list[dict]:
         if len(train) > max_points:  # keep first, last and an even subsample
             idx = np.unique(np.linspace(0, len(train) - 1, max_points).astype(int))
             train = [train[i] for i in idx]
-        params = None
+        params, groups = None, None
         ck = os.path.join(d, "last.pt")
         if os.path.exists(ck):
             try:
                 import torch
                 sd = torch.load(ck, map_location="cpu", weights_only=False)["model"]
                 params = int(sum(v.numel() for v in sd.values()))
+                groups = param_groups(sd)
             except Exception:
                 pass
-        runs.append(dict(name=os.path.basename(d), path=d, config=cfg, params=params,
+        runs.append(dict(name=os.path.basename(d), path=d, config=cfg, params=params, param_groups=groups,
                          train=train, val=val,
                          mtime=_dt.datetime.fromtimestamp(os.path.getmtime(cfg_path)).isoformat()))
     return runs
@@ -133,7 +162,7 @@ def lam_min(node, edge):
 
 def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
     from eval.baselines import BASELINES
-    from eval.metrics import rmse_per_traj
+    from eval.metrics import fidelity_pairs, rmse_per_traj
     with h5py.File(data, "r") as f:
         attrs = dict(f.attrs)
         node, edge = f["node"][idx], f["edge"][idx]
@@ -178,7 +207,8 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
     for k, (pn, pe) in preds.items():
         K = pn.shape[0]
         rn, re = rmse_per_traj(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])
-        d = dict(node=_r(pn, 4), rmse_n=_r(rn[0], 5), rmse_e=_r(re[0], 5),
+        fid = fidelity_pairs(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])[0]
+        d = dict(node=_r(pn, 4), rmse_n=_r(rn[0], 5), rmse_e=_r(re[0], 5), fid2=_r(fid, 5),
                  lam_min=_r(lam_min(pn.astype(np.float64), pe.astype(np.float64)), 5))
         # edge predictions only for ZZ, XX and YZ channels to keep the file small
         d["edge_sel"] = {c: _r(pe[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))}

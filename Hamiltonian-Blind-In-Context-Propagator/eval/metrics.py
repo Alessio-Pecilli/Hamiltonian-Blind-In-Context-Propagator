@@ -25,6 +25,49 @@ def rmse_per_traj(pn, tn, pe, te):
     return rn, re
 
 
+_P16 = None
+
+
+def rho_pairs_np(node: np.ndarray, edge: np.ndarray) -> np.ndarray:
+    """Two-qubit reduced density matrices of all pairs i<j from observables (Eq. 28):
+    node (..., n, 3), edge (..., n, n, 9) -> (..., P, 4, 4) complex128."""
+    global _P16
+    if _P16 is None:
+        from data.physics import PAULIS, SI
+        ps = (SI,) + PAULIS
+        _P16 = np.stack([np.stack([np.kron(a, b) for b in ps]) for a in ps])
+    n = node.shape[-2]
+    iu, ju = np.triu_indices(n, 1)
+    lead = node.shape[:-2]
+    c = np.zeros((*lead, len(iu), 4, 4))
+    c[..., 0, 0] = 1.0
+    c[..., 1:, 0] = node[..., iu, :]
+    c[..., 0, 1:] = node[..., ju, :]
+    c[..., 1:, 1:] = edge[..., iu, ju, :].reshape(*lead, len(iu), 3, 3)
+    return 0.25 * np.einsum("...ab,abxy->...xy", c, _P16)
+
+
+def _psd_sqrt(rho: np.ndarray):
+    w, v = np.linalg.eigh(rho)
+    w = np.clip(w, 0.0, None)
+    return w, (v * np.sqrt(w)[..., None, :]) @ np.conj(np.swapaxes(v, -1, -2))
+
+
+def fidelity_pairs(pn, tn, pe, te) -> np.ndarray:
+    """Mean over pairs i<j of the Uhlmann fidelity F(rho_hat_ij, rho_ij) between the two-qubit
+    reduced state rebuilt from the prediction and from the true observables.
+    Inputs (N, H, n, 3) / (N, H, n, n, 9) -> (N, H). rho_hat is projected on the PSD cone
+    (negative eigenvalues clipped, trace renormalised) before the comparison."""
+    rh = rho_pairs_np(np.asarray(pn, np.float64), np.asarray(pe, np.float64))
+    rt = rho_pairs_np(np.asarray(tn, np.float64), np.asarray(te, np.float64))
+    w_, vh = np.linalg.eigh(rh)
+    rh = (vh * np.clip(w_, 0, None)[..., None, :]) @ np.conj(np.swapaxes(vh, -1, -2))
+    rh = rh / np.trace(rh, axis1=-2, axis2=-1).real[..., None, None]
+    _, sq = _psd_sqrt(rt)
+    ev = np.linalg.eigvalsh(sq @ rh @ sq)
+    return (np.sqrt(np.clip(ev, 0.0, None)).sum(-1) ** 2).clip(0.0, 1.0).mean(-1)
+
+
 def k_star(curve: np.ndarray, eps: float = EPS_KSTAR) -> int:
     """max{k : RMSE(k') <= eps for all k' <= k} (0 if already k=1 fails)."""
     bad = np.nonzero(~(np.asarray(curve) <= eps))[0]
@@ -84,7 +127,7 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             continue
         loader = make_loader(path, (T, T), Hk, 1, batch_size, shuffle=False, permute=False,
                              fixed_T=T, fixed_t0=t0, num_workers=num_workers)
-        rn_all, re_all, gate, attn, adj, J, h = [], [], [], [], [], [], []
+        rn_all, re_all, fid_all, gate, attn, adj, J, h = [], [], [], [], [], [], [], []
         pJ, ph, padj, S_F = [], [], [], []
         n_steps, t_model = 0, 0.0
         for bi, batch in enumerate(loader):
@@ -105,6 +148,8 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
                                    pred["edge"][:, 0].cpu().numpy(), te[:, 0].cpu().numpy())
             rn_all.append(rn)
             re_all.append(re)
+            fid_all.append(fidelity_pairs(pred["node"][:, 0].cpu().numpy(), tn[:, 0].cpu().numpy(),
+                                          pred["edge"][:, 0].cpu().numpy(), te[:, 0].cpu().numpy()))
             adj.append(batch["adj"].cpu().numpy())
             J.append(batch["J"].cpu().numpy())
             h.append(batch["h"].cpu().numpy())
@@ -122,6 +167,7 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
         adj, J, h = np.concatenate(adj), np.concatenate(J), np.concatenate(h)
         curve_n, curve_e = rn.mean(0), re.mean(0)
         res = dict(T=T, H=Hk, ntraj=len(rn), rmse_n=curve_n.tolist(), rmse_e=curve_e.tolist(),
+                   fidelity2=np.concatenate(fid_all).mean(0).tolist(),
                    k_star=k_star(curve_n), sec_per_step=t_model / max(n_steps, 1))
         adj_u, J_u = upper_pairs(adj), upper_pairs(J)
         if gate:
