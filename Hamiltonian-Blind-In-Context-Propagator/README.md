@@ -20,10 +20,12 @@ Baselines (Sec. 7.1) are deliberately lightweight.
 | `model/propagator.py` | 3.1 | full model |
 | `losses.py` | 4 | L_pred, L_phys (ρ̂ ≥ 0 via `eigvalsh`), L_probe, ‖θ‖² |
 | `train.py` | 5 | AdamW, warm-up + cosine, clipping, bf16 body / fp32 head, checkpoints (config + git commit), TensorBoard + `log.jsonl` |
-| `eval/metrics.py` | 6 | RMSE_n,e(k), k*(T), graph AUROC (gate and spatial attention), probe R²/AUROC, ‖S‖_F, cost |
+| `eval/metrics.py` | 6 | RMSE_n,e(k), k*(T), reduced two-qubit state fidelity F₂(k), graph AUROC (gate and spatial attention), probe R²/AUROC, ‖S‖_F, cost |
 | `eval/baselines.py` | 7.1 | persistence, ridge DMD (w = 1, 4), oracle, HL + oracle state |
 | `eval/evaluate.py` | 6–7 | evaluation CLI, `results.json`, context–horizon and RMSE figures |
-| `tools/export_dashboard.py` | – | collects runs, results, datasets and a sample rollout into `dashboard_data.json` for the dashboard |
+| `tools/export_dashboard.py` | – | collects runs, results, datasets and a sample rollout into one JSON (`dashboard_data.json`) |
+| `tools/publish_dashboard.py` | – | export → `docs/data/runs/…json` → `index.json` → git commit + push (GitHub Pages) |
+| `../docs/` | – | the dashboard (static site served by GitHub Pages): `index.html`, `style.css`, `app.js`, `glossary.js`, `model-info.js`, `data/` |
 | `configs/config.yaml` | 3.9 | single config with the `local` and `hpc` presets |
 
 ## Quick start
@@ -49,21 +51,47 @@ bash scripts/make_datasets.sh transfer 32                                   # St
 python -m eval.evaluate --ckpt runs/hpc_A/last.pt --data datasets/n12/test.h5 --out results/n12
 ```
 
-Dashboard (all run results, inputs/outputs, physics and formulas in one page):
+## Dashboard
+
+The dashboard (results, input/output on one trajectory, inferred graph, equations, loss terms, training
+curves and a glossary with a popup on every quantity) is a static site in `docs/` at the root of the
+git repository, next to this folder. Live version:
+
+**https://alessio-pecilli.github.io/Hamiltonian-Blind-In-Context-Propagator/**
+
+Enable it once: GitHub → *Settings → Pages → Build and deployment → Deploy from a branch* →
+branch `main`, folder `/docs`. Pages needs a **public repository** or a GitHub Pro (or higher) plan
+for a private one. `docs/.nojekyll` is already there.
+
+Publish a new version after training and evaluation (from this folder, PowerShell or bash):
 
 ```bash
-python -m tools.export_dashboard --runs runs --results results \
-    --data datasets/n8/test.h5 --ckpt runs/local_A/last.pt --T 32 --horizon 64 --out dashboard_data.json
+python -m tools.publish_dashboard --label "n8 no S" --notes "use_S=false"     --runs runs --results results --data datasets/n8/test.h5     --ckpt runs/local_A/last.pt --T 32 --horizon 64 --sample 0
 ```
 
-then open the dashboard (`dashboard/hbicp_dashboard.html` or the published link) and press
-"Carica dashboard_data.json".
+It writes `docs/data/runs/<YYYYmmdd-HHMMSS>_<label>.json`, puts it first (and as `latest`) in
+`docs/data/index.json`, keeps the last `--keep N` exports (default 20), then runs `git add docs/data`,
+`git commit -m "dashboard: <label>"` and `git push`. Options: `--no-push`, `--dry-run`, `--keep`; it warns
+when the JSON exceeds 5 MB. Pages updates about a minute after the push. On Windows,
+`scriptsun_all.ps1 -Publish` does the whole pipeline and publishes at the end.
+
+The page opens `data/index.json`, loads `latest`, and lets you pick older exports in the *Export* menu.
+Without the manifest it falls back to `data/demo.json` (a small cloud demo run). A local `dashboard_data.json`
+(from `python -m tools.export_dashboard --out dashboard_data.json`) can be opened with the *Carica* button.
+To look at it locally: `python -m http.server` inside `docs/`, then open http://localhost:8000
+(opening `index.html` from disk blocks the JSON requests). `?dev` in the URL logs glossary terms without an entry.
+`runs/`, `results/`, `datasets/`, `*.pt` and `*.h5` stay out of git.
 
 Any config key can be overridden with `--set section.key=value`.
 Large datasets: keep `data.preload=false` (HDF5 is read lazily per item).
 
 ## Conventions and choices not fixed by the spec
 
+* `model.use_S: false` (default in `configs/config.yaml`): no dissipation, `G = A − Aᵀ` is skew-symmetric and `‖S‖_F = 0`;
+  configs without the key keep the old behaviour (S active), so older checkpoints still load.
+* Fidelity F₂(k): mean over pairs i<j of the Uhlmann fidelity between the two-qubit marginal rebuilt from the prediction
+  (Eq. 28, projected on the PSD cone) and the one from the true observables. The full-state fidelity is not
+  defined for a model that only outputs weight-≤2 observables.
 * Site 0 is the most significant qubit; edge channel `c = 3a + b`, `a, b ∈ {x, y, z}`.
 * `e_ii = 0` is kept throughout the body (diagonal masked after every update), not only at embedding.
 * Value augmentation is computed as `W_ev (Σ_j α_ij LN(e_ij))` (identical by linearity, O(n² d_e) memory).

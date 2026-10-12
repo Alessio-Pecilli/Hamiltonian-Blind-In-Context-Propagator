@@ -1,10 +1,14 @@
 # Full local pipeline on Windows (PowerShell), from the repository root:
 #   powershell -ExecutionPolicy Bypass -File scripts\run_all.ps1
 # Optional:  -Steps 20000  -Workers 4  -SkipInstall
+#            -Publish [-Label "n8 no S"] [-Notes "..."]   publish the dashboard on GitHub Pages at the end
 param(
     [int]$Steps = 20000,
     [int]$Workers = 4,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$Publish,
+    [string]$Label = "run_all",
+    [string]$Notes = ""
 )
 $ErrorActionPreference = "Stop"
 function Run($cmd) {
@@ -33,4 +37,8 @@ Run "python train.py --preset local --set train.steps=$Steps train.out_dir=runs/
 
 # 5. evaluation + baselines (Sec. 6-7)
 Run "python -m eval.evaluate --ckpt runs/local_A/last.pt --data datasets/n8/test.h5 --T 8 16 32 64 --horizon 64 --baselines persistence dmd dmd4 oracle hl_oracle --out results/n8_A"
+# 6. optional: export + commit + push the dashboard (docs/data in the git root, served by GitHub Pages)
+if ($Publish) {
+    Run "python -m tools.publish_dashboard --label '$Label' --notes '$Notes' --runs runs --results results --data datasets/n8/test.h5 --ckpt runs/local_A/last.pt --T 32 --horizon 64 --sample 0"
+}
 Write-Host "`nDone. See results\n8_A\results.json, context_horizon.png, rmse_vs_k.png" -ForegroundColor Green
