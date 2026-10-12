@@ -218,3 +218,5 @@ input[type="search"] { font: 400 13px var(--f-body); color: var(--ink); backgrou
 p, .lede, .cap, .how, .ex, .banner span { overflow-wrap: anywhere; }
 .mono { overflow-wrap: anywhere; }
 .stage-b dd, .steps li, .eqcard .where li > span, .ex, .check .w { overflow-x: auto; overflow-y: hidden; }
+#eqGrid { grid-template-columns: minmax(0, 1fr); }
+.eqcard .where { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 6px 24px; }
