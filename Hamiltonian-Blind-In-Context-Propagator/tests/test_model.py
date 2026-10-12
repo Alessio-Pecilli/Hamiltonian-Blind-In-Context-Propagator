@@ -121,3 +121,15 @@ def test_single_batch_overfit_decreases(tiny_cfg, tiny_h5):
         opt.zero_grad(); loss.backward(); opt.step()
         first = first or logs["pred"]
     assert logs["pred"] < 0.2 * first
+
+
+def test_edge_decoder_symmetric_with_asymmetric_beta():
+    """Eq. (23): E[j,i,(b,a)] = E[i,j,(a,b)] must hold for any beta, not only beta = 0."""
+    torch.manual_seed(0)
+    head = GeneratorHead(d=16, de=8, m=6, K=5).double()
+    with torch.no_grad():
+        head.beta.copy_(torch.randn(9).double())
+    z = torch.randn(3, 2, 5, 6).double()
+    _, edge = head.decode(z)
+    swap = [3 * b + a for a in range(3) for b in range(3)]
+    assert torch.allclose(edge, edge.transpose(-2, -3)[..., swap], atol=1e-12)

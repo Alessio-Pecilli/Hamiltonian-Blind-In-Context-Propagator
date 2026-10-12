@@ -71,8 +71,10 @@ class TrajectoryDataset(Dataset):
             T = int(rng.integers(self.T_range[0], self.T_range[1] + 1))
             # t0 + T + H < L_traj
             t0 = int(rng.integers(0, self.L - T - self.H))
-            lo = min(self.min_anchor, T - 1)
-            extra = rng.integers(lo, T, size=self.anchors - 1)
+            if T > self.min_anchor:
+                extra = rng.integers(self.min_anchor, T, size=self.anchors - 1)
+            else:  # spec range [t0+8, t0+T) is empty: repeat the last context position
+                extra = np.full(self.anchors - 1, T)
             anchors = np.concatenate([[T], extra])
         sl = slice(t0, t0 + T + self.H + 1)
         item = dict(
@@ -119,8 +121,8 @@ def gather_targets(batch: dict, horizon: int) -> tuple[torch.Tensor, torch.Tenso
 
 
 def make_loader(path, T_range, horizon, anchors, batch_size, shuffle=True, num_workers=0,
-                permute=True, fixed_T=None, fixed_t0=None, preload=True):
-    ds = TrajectoryDataset(path, T_range, horizon, anchors, permute=permute, fixed_T=fixed_T,
-                           fixed_t0=fixed_t0, preload=preload)
+                permute=True, fixed_T=None, fixed_t0=None, preload=True, min_anchor=8):
+    ds = TrajectoryDataset(path, T_range, horizon, anchors, min_anchor=min_anchor, permute=permute,
+                           fixed_T=fixed_T, fixed_t0=fixed_t0, preload=preload)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
                       collate_fn=collate, drop_last=shuffle, persistent_workers=num_workers > 0)

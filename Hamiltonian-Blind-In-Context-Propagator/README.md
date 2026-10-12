@@ -23,6 +23,7 @@ Baselines (Sec. 7.1) are deliberately lightweight.
 | `eval/metrics.py` | 6 | RMSE_n,e(k), k*(T), graph AUROC (gate and spatial attention), probe R²/AUROC, ‖S‖_F, cost |
 | `eval/baselines.py` | 7.1 | persistence, ridge DMD (w = 1, 4), oracle, HL + oracle state |
 | `eval/evaluate.py` | 6–7 | evaluation CLI, `results.json`, context–horizon and RMSE figures |
+| `tools/export_dashboard.py` | – | collects runs, results, datasets and a sample rollout into `dashboard_data.json` for the dashboard |
 | `configs/config.yaml` | 3.9 | single config with the `local` and `hpc` presets |
 
 ## Quick start
@@ -47,6 +48,16 @@ python train.py --preset hpc --set train.out_dir=runs/hpc_B model.head=B     # a
 bash scripts/make_datasets.sh transfer 32                                   # Stage 3 test sets
 python -m eval.evaluate --ckpt runs/hpc_A/last.pt --data datasets/n12/test.h5 --out results/n12
 ```
+
+Dashboard (all run results, inputs/outputs, physics and formulas in one page):
+
+```bash
+python -m tools.export_dashboard --runs runs --results results \
+    --data datasets/n8/test.h5 --ckpt runs/local_A/last.pt --T 32 --horizon 64 --out dashboard_data.json
+```
+
+then open the dashboard (`dashboard/hbicp_dashboard.html` or the published link) and press
+"Carica dashboard_data.json".
 
 Any config key can be overridden with `--set section.key=value`.
 Large datasets: keep `data.preload=false` (HDF5 is read lazily per item).

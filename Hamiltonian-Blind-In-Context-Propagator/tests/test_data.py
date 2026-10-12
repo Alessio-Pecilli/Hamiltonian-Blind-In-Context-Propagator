@@ -85,3 +85,15 @@ def test_loader_permutation(tiny_h5):
     T = batch["T"]
     assert batch["node"].shape[1] == int(T.max()) + 4 + 1
     assert (batch["anchors"][:, 0] == T).all() and (batch["anchors"] <= T[:, None]).all()
+
+
+def test_anchor_range(tiny_h5):
+    """Sec. 5.1: anchors = last context position + positions in [t0+8, t0+T) (relative: [8, T))."""
+    torch.manual_seed(0)
+    ds = TrajectoryDataset(tiny_h5, (8, 24), 4, anchors=4, permute=False)
+    for k in range(300):
+        it = ds[k % len(ds)]
+        T, a = it["T"], it["anchors"]
+        assert a[0] == T
+        assert all((8 <= x < T) or (T <= 8 and x == T) for x in a[1:])
+        assert it["t0"] + T + 4 < ds.L

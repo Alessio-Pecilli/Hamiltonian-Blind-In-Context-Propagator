@@ -106,7 +106,7 @@ def main():
 
     loader = make_loader(dc["train"], (tc["T_min"], tc["T_max"]), tc["H"], tc["anchors"],
                          tc["batch_size"], shuffle=True, num_workers=dc.get("num_workers", 0),
-                         preload=dc.get("preload", True))
+                         preload=dc.get("preload", True), min_anchor=tc.get("min_anchor", 8))
     logger = Logger(out_dir)
     total = tc["steps"]
     fixed_batch = None

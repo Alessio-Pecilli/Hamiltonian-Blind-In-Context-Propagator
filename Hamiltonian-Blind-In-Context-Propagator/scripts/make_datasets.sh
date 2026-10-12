@@ -11,7 +11,7 @@ case "$WHAT" in
   local)
     $G --n 8 --ntraj 1000 --L_traj 160 --seed 1 --out datasets/n8/train.h5
     $G --n 8 --ntraj 100  --L_traj 160 --seed 2 --out datasets/n8/val.h5
-    $G --n 8 --ntraj 100  --L_traj 160 --seed 3 --out datasets/n8/test.h5
+    $G --n 8 --ntraj 100  --L_traj 192 --seed 3 --out datasets/n8/test.h5
     ;;
   hpc)
     $G --n 10 --ntraj 8000 --L_traj 161 --seed 11 --out datasets/n10/train.h5

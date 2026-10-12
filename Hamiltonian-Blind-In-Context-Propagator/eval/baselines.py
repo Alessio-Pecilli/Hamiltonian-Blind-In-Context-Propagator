@@ -69,7 +69,7 @@ def ridge_dmd(node, edge, H, w: int = 1, lam: float = 1e-3, **_):
         nxt = np.concatenate(hist) @ Wt
         preds.append(nxt)
         hist = [nxt] + hist[:-1]
-    p = np.clip(np.stack(preds), -1, 1)                     # observables are bounded
+    p = np.stack(preds)                                     # no clipping (spec: o_hat = W^k o_T)
     pn, pe = unflatten_obs(p, n)
     return pn.astype(np.float32), pe.astype(np.float32)
 
@@ -97,9 +97,10 @@ def oracle(node, edge, H, attrs=None, seed=None, t_abs=None, **_):
 
 
 def lasso_ista(A, b, alpha, iters=3000, tol=1e-10):
-    """min 1/(2N) ||Ax - b||^2 + alpha ||x||_1   (FISTA)."""
+    """min 1/(2N) ||Ax - b||^2 + sum_i alpha_i |x_i|   (FISTA); alpha scalar or per-coordinate."""
     N = A.shape[0]
     Lc = np.linalg.norm(A, 2) ** 2 / N
+    alpha = np.broadcast_to(np.asarray(alpha, float), (A.shape[1],))
     x = np.zeros(A.shape[1]); y = x.copy(); tk = 1.0
     for _ in range(iters):
         g = A.T @ (A @ y - b) / N
@@ -116,7 +117,8 @@ def lasso_ista(A, b, alpha, iters=3000, tol=1e-10):
 
 def estimate_tfim(node, edge, dt, l1=1e-3):
     """Least squares on the single-site Heisenberg equations of the TFIM (Eq. 29), all pairs
-    allowed. Unknowns: h (n) and J_ij for i<j. Returns J (n,n), h (n)."""
+    allowed. Unknowns: h (n) and J_ij for i<j. The l1 penalty (sparsity of the graph) acts on
+    the couplings J only, not on the fields h. Returns J (n,n), h (n)."""
     node, edge = node.astype(np.float64), edge.astype(np.float64)
     Tp1, n, _ = node.shape
     iu, ju = np.triu_indices(n, 1)
@@ -140,7 +142,8 @@ def estimate_tfim(node, edge, dt, l1=1e-3):
             rz[i] = -2 * Nm[t, i, Y]                             # dZ = -2 h <Y>
             rows += [rx, ry, rz]
             rhs += [d[t, i, X], d[t, i, Y], d[t, i, Z]]
-    x = lasso_ista(np.array(rows), np.array(rhs), l1)
+    alpha = np.concatenate([np.zeros(n), np.full(P, l1)])  # no penalty on h
+    x = lasso_ista(np.array(rows), np.array(rhs), alpha)
     h = x[:n]
     J = np.zeros((n, n)); J[iu, ju] = x[n:]; J = J + J.T
     return J, h

@@ -61,7 +61,7 @@ class GeneratorHead(nn.Module):
         node = torch.tanh(self.D_n(z))
         zB = torch.einsum("...im,cmk->...ick", z, self.B)
         x = torch.einsum("...ick,...jk->...ijc", zB, z)
-        edge = torch.tanh(symmetrize_edge_channels(x) + self.beta)
+        edge = torch.tanh(symmetrize_edge_channels(x + self.beta))  # beta inside: symmetry holds exactly
         return node, edge
 
     def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int):
