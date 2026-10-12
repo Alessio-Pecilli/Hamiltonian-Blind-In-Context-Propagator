@@ -32,6 +32,10 @@ const EQS = [
     tex: R`h_{i,t}\leftarrow h_{i,t}+\mathrm{CausalMHA}_t\big(\mathrm{LN}(h_{i,0:T})\big),\qquad e_{ij,t}\leftarrow e_{ij,t}+\mathrm{CausalDWConv}_t\big(\mathrm{LN}(e_{ij,0:T})\big)`,
     note: "I siti hanno attenzione causale su tutto il passato (RoPE); le coppie solo una convoluzione di 4 passi per canale. Dopo L blocchi il campo recettivo di una coppia è 3L+1 passi.",
     where: [["tmha", "\\mathrm{CausalMHA}", "attenzione causale sui propri passi passati"], ["conv", "\\mathrm{CausalDWConv}", "filtro causale depthwise, kernel 4"], ["light", "\\text{campo recettivo}", "quanti passi/siti influenzano un token"], ["Lbl", "L", "numero di blocchi"]] },
+  { tag: "opz.", title: "Estensioni per le coppie (pair_attn, triangle, pair_latent)",
+    tex: R`e_{ij}\leftarrow e_{ij}+\mathrm{Tri}\Big(\tfrac1n\sum_k a_{ik}\odot a_{jk}\Big),\qquad e_{ij,t}\leftarrow e_{ij,t}+\mathrm{CausalMHA}_t(e_{ij,0:T}),\qquad u_{ij}(k)=e^{k\Delta t\,C_{ij}}u_{ij}(0)`,
+    note: "Tre modifiche opzionali (flag nel config, attive di default) che danno alle coppie ciò che i nodi avevano già: memoria temporale su tutta la finestra, contesto dei terzi siti e uno stato proprio da propagare.",
+    where: [["pairattn", "\\mathrm{CausalMHA}_t", "attenzione temporale causale sulle coppie"], ["triangle", "\\sum_k a_{ik}\\odot a_{jk}", "aggiornamento triangolare sui terzi siti"], ["pairlat", "u_{ij},\\ C_{ij}", "latente di coppia e suo generatore antisimmetrico"]] },
   { tag: "(17)(18)", title: "Coefficienti globali e latenti per sito",
     tex: R`\theta_t=W_\theta\,\frac1n\sum_{i=1}^n h^{(L)}_{i,t}\in\mathbb R^K,\qquad z_{i,t}=W_z\,h^{(L)}_{i,t}\in\mathbb R^m,\quad Z_t=[z_1;\dots;z_n]`,
     note: "θ è una descrizione globale e indipendente da n della dinamica; z porta la memoria dello stato nascosto.",
@@ -100,6 +104,7 @@ const LOSS_CARDS = [
 /* Stadi del tracciatore. dims: {n,d,de,nh,L,m,K,T,H}; sel: {kind: "node"|"pair", i, j}. pg: param_groups | null */
 function traceStages(dims, sel, pg) {
   const { n, d, de, nh, L, m, K } = dims;
+  const pa = !!dims.pair_attn, tri = !!dims.triangle, pl = dims.pair_latent || 0;   // opzioni architetturali della run
   const node = sel.kind === "node", i = sel.i, j = sel.j;
   const P = (key) => (pg && pg[key] != null ? ` · <b>${pg[key].toLocaleString("it-IT")}</b> parametri` : "");
   const sl = node ? `[:, :, ${i}, :]` : `[:, :, ${i}, ${j}, :]`;
@@ -134,15 +139,18 @@ function traceStages(dims, sel, pg) {
       rows: node
         ? [["Cosa dà", `Il token \\(h_${i}\\) entra, insieme a quello di ogni altro sito \\(j\\), nel prodotto \\((W_a\\mathrm{LN}h_${i})\\odot(W_b\\mathrm{LN}h_j)\\) che aggiorna la coppia \\((${i},j)\\).`]]
         : [["Operazione", `\\(e_{${i}${j}}\\leftarrow e_{${i}${j}}+\\mathrm{MLP}_{eu}(\\mathrm{LN}e_{${i}${j}};\\,(W_a\\mathrm{LN}h_${i})\\odot(W_b\\mathrm{LN}h_${j}))\\), poi \\((e_{${i}${j}}+e_{${j}${i}})/2\\).`],
-           ["Cosa vede", `Solo sé stessa e i due siti ${i} e ${j}. <b>Non vede le altre coppie</b> \\(e_{${i}k}\\), \\(e_{k${j}}\\): nessun aggiornamento «triangolare». Le informazioni degli altri siti arrivano solo indirettamente, già mescolate in \\(h_${i}\\), \\(h_${j}\\).`],
+           ["Cosa vede", tri ? `Sé stessa, i due siti ${i} e ${j} e, con l'<b>aggiornamento triangolare</b>, le coppie \\(e_{${i}k}\\) ed \\(e_{${j}k}\\) su tutti i terzi siti k: \\(e_{${i}${j}}\\leftarrow e_{${i}${j}}+\\mathrm{Tri}(\\tfrac1n\\sum_k a_{${i}k}\\odot a_{${j}k})\\).`
+             : `Solo sé stessa e i due siti ${i} e ${j}. <b>Non vede le altre coppie</b> \\(e_{${i}k}\\), \\(e_{k${j}}\\): nessun aggiornamento «triangolare». Le informazioni degli altri siti arrivano solo indirettamente, già mescolate in \\(h_${i}\\), \\(h_${j}\\).`],
            ["Capacità", `MLP<sub>eu</sub>, W<sub>a</sub>, W<sub>b</sub>${P("spatial_pair_update")}`]],
       cross: [node ? "↘ scrive nelle coppie (i, ·)" : "↖ riceve dai nodi i e j"] },
     { n: 5, t: `Strato temporale (× ${L} blocchi)`, role: node ? "node" : "pair",
       rows: node
         ? [["Operazione", `Attenzione causale multi-testa sui passi \\(t'\\le t\\) del solo sito ${i} (RoPE), poi FFN. Non confronta mai siti diversi.`],
            ["Campo recettivo", `tutta la finestra: <b>T+1</b> passi, completamente connessi`], ["Capacità", `MHA + FFN${P("temporal_node")}`]]
-        : [["Operazione", `Convoluzione causale <b>depthwise</b> di kernel 4: ogni canale vede solo se stesso a \\(t, t-1, t-2, t-3\\). Nessuna attenzione, nessun mescolamento tra canali.`],
-           ["Campo recettivo", `<b>${rf}</b> passi dopo ${L} blocchi (3L+1), contro la finestra intera dei nodi`], ["Capacità", `un filtro per canale${P("temporal_pair")}`]],
+        : [["Operazione", pa ? `Convoluzione causale depthwise di kernel 4 <b>più attenzione causale multi-testa</b> sui passi \\(t'\\le t\\) della coppia (RoPE), come per i siti.`
+             : `Convoluzione causale <b>depthwise</b> di kernel 4: ogni canale vede solo se stesso a \\(t, t-1, t-2, t-3\\). Nessuna attenzione, nessun mescolamento tra canali.`],
+           ["Campo recettivo", pa ? `tutta la finestra: <b>T+1</b> passi, come i nodi` : `<b>${rf}</b> passi dopo ${L} blocchi (3L+1), contro la finestra intera dei nodi`],
+           ["Capacità", `${pa ? "conv + MHA" : "un filtro per canale"}${P("temporal_pair")}`]],
       cross: [] },
     { n: 6, t: "LayerNorm finale e ancoraggio", role: node ? "node" : "pair",
       rows: node ? [["Esce", `\\(h^{(L)}_{${i},t}\\in\\mathbb R^{${d}}\\) nella posizione dell'anchor.`]] : [["Esce", `\\(\\bar e_{${i}${j}}=e^{(L)}_{${i}${j},t}\\in\\mathbb R^{${de}}\\) nella posizione dell'anchor.`]],
@@ -154,7 +162,8 @@ function traceStages(dims, sel, pg) {
            ["Capacità", `W<sub>z</sub>, W<sub>θ</sub>, basi, decoder${P("head_node_and_generator")}`]]
         : [["Gate", `\\(g_{${i}${j}}=\\sigma(w_g^\\top\\bar e_{${i}${j}})\\in(0,1)\\): la stima dell'arco.`],
            ["Accoppiamento", `\\(A_{${i}${j}}=g_{${i}${j}}\\,\\mathrm{reshape}_{${m}\\times${m}}(W_A\\bar e_{${i}${j}})\\): blocco di G che lega i latenti dei siti ${i} e ${j}. <b>È l'unico punto in cui la feature di coppia entra nella dinamica.</b>`],
-           ["Capacità", `w<sub>g</sub> e W<sub>A</sub>${P("head_pair")}`]],
+           ...(pl ? [["Latente di coppia", `\\(u_{${i}${j}}(0)=W_u\\bar e_{${i}${j}}\\in\\mathbb R^{${pl}}\\), ruotato da \\(C_{${i}${j}}=B-B^\\top\\) letto da \\(\\bar e_{${i}${j}}\\): \\(u(k)=\\exp(k\\Delta t\\,C)u(0)\\). Qui la feature di coppia entra <b>anche</b> nella previsione.`]] : []),
+           ["Capacità", `w<sub>g</sub>, W<sub>A</sub>${pl ? ", W<sub>u</sub>, W<sub>C</sub>, D<sub>u</sub>" : ""}${P("head_pair")}`]],
       cross: [node ? "z, θ ← da nodi" : "g, A_ij ← da coppie"] },
     { n: 8, t: "Propagazione", role: "both",
       rows: [["Operazione", `\\(Z_{t+k}=\\exp(\\Delta t\\,G)^k Z_t\\), con \\(G\\) di dimensione ${n * m}×${n * m}.`],
@@ -164,8 +173,10 @@ function traceStages(dims, sel, pg) {
     { n: 9, t: "Decoder", role: node ? "node" : "pair",
       rows: node
         ? [["Operazione", `\\(\\hat N_{t+k}[${i},:]=\\tanh(D_n z_{${i},t+k})\\): lineare nel latente.`], ["Cosa dipende da cosa", "la previsione del nodo dipende solo dal proprio latente."]]
-        : [["Operazione", `\\(\\hat E_{t+k}[${i},${j},c]=\\tanh(z_${i}^\\top B_c z_${j}+\\beta_c)\\), poi simmetrizzata.`],
-           ["Cosa dipende da cosa", `La previsione della coppia dipende <b>solo dai latenti dei due siti</b>, non da \\(\\bar e_{${i}${j}}\\): la correlazione iniziale a t = T deve essere già codificata, in forma bilineare, in \\(z_${i}\\) e \\(z_${j}\\).`]],
+        : [["Operazione", pl ? `\\(\\hat E_{t+k}[${i},${j},c]=\\tanh(z_${i}^\\top B_c z_${j}+\\beta_c+(D_uu_{${i}${j}})_c)\\), poi simmetrizzata.`
+             : `\\(\\hat E_{t+k}[${i},${j},c]=\\tanh(z_${i}^\\top B_c z_${j}+\\beta_c)\\), poi simmetrizzata.`],
+           ["Cosa dipende da cosa", pl ? `Dai latenti dei due siti <b>e dal latente di coppia</b> \\(u_{${i}${j}}\\), quindi direttamente da \\(\\bar e_{${i}${j}}\\).`
+             : `La previsione della coppia dipende <b>solo dai latenti dei due siti</b>, non da \\(\\bar e_{${i}${j}}\\): la correlazione iniziale a t = T deve essere già codificata, in forma bilineare, in \\(z_${i}\\) e \\(z_${j}\\).`]],
       cross: [] },
     { n: 10, t: "Probe e loss", role: "both",
       rows: node
@@ -178,17 +189,17 @@ function traceStages(dims, sel, pg) {
 
 /* Ipotesi sull'asimmetria: ogni voce è un fatto verificabile nel codice. */
 const ASYMMETRY = [
-  ["Capacità temporale", "I nodi hanno attenzione causale su tutta la finestra; le coppie solo una convoluzione depthwise di 4 passi per canale (campo recettivo 3L+1), senza mescolare i canali. Eppure le coppie sono oltre il 90% dei numeri in ingresso.", "model/temporal.py"],
-  ["Nessuna codifica del tempo sulle coppie", "PE(t) è sommata solo ai token di sito; la coppia conosce solo l'ordine locale dato dai 4 tap della convoluzione.", "model/embed.py"],
-  ["Aggiornamento di coppia locale", "e_ij si aggiorna solo da sé stessa e da h_i, h_j. Non c'è un passo che aggreghi e_ik ed e_kj (informazione «triangolare»).", "model/spatial.py"],
-  ["Decoder delle coppie cieco a ē_ij", "Ê_ij(k) = tanh(z_iᵀ B_c z_j + β_c): la correlazione prevista dipende dai latenti dei siti, non dalla feature di coppia. ē_ij influisce solo su gate e blocchi A_ij di G.", "model/head_generator.py"],
+  ["Capacità temporale", "I nodi hanno attenzione causale su tutta la finestra; le coppie solo una convoluzione depthwise di 4 passi per canale (campo recettivo 3L+1), senza mescolare i canali. Eppure le coppie sono oltre il 90% dei numeri in ingresso.", "model/temporal.py", "pair_attn"],
+  ["Nessuna codifica del tempo sulle coppie", "PE(t) è sommata solo ai token di sito; la coppia conosce solo l'ordine locale dato dai 4 tap della convoluzione.", "model/embed.py", "pair_attn"],
+  ["Aggiornamento di coppia locale", "e_ij si aggiorna solo da sé stessa e da h_i, h_j. Non c'è un passo che aggreghi e_ik ed e_kj (informazione «triangolare»).", "model/spatial.py", "triangle"],
+  ["Decoder delle coppie cieco a ē_ij", "Ê_ij(k) = tanh(z_iᵀ B_c z_j + β_c): la correlazione prevista dipende dai latenti dei siti, non dalla feature di coppia. ē_ij influisce solo su gate e blocchi A_ij di G.", "model/head_generator.py", "pair_latent"],
   ["Probe lineare e bersaglio su tutte le coppie", "Ĵ è una lettura lineare di ē_ij; se J è codificato in modo non lineare risulta sottostimato. L'errore su J include le coppie senza arco (J = 0), che dominano la varianza.", "model/probe.py, losses.py"],
   ["Il probe non aiuta il corpo", "L_probe è staccato dal corpo: se J non serve a prevedere meglio i nodi, nulla spinge le feature di coppia a contenerlo.", "losses.py"],
 ];
 const CANDIDATES = [
-  ["Attenzione temporale (o GRU) anche sulle coppie", "Dà alle coppie lo stesso campo recettivo dei nodi. Costo O(n²T²d_e): per n = 8 e T = 64 accettabile."],
-  ["Aggiornamento triangolare di e_ij", "Aggregare e_ik ed e_kj sulle terne, come nei blocchi triangolari di AlphaFold, per far arrivare alle coppie la struttura del grafo."],
-  ["Latente di coppia o decoder con ē_ij", "Propagare anche un latente per coppia con lo stesso generatore, oppure aggiungere un termine che legga ē_ij nel decoder di Ê, così la correlazione iniziale non passa solo dai latenti di sito."],
+  ["Attenzione temporale (o GRU) anche sulle coppie", "Dà alle coppie lo stesso campo recettivo dei nodi. Costo O(n²T²d_e): per n = 8 e T = 64 accettabile.", "pair_attn"],
+  ["Aggiornamento triangolare di e_ij", "Aggregare e_ik ed e_kj sulle terne, come nei blocchi triangolari di AlphaFold, per far arrivare alle coppie la struttura del grafo.", "triangle"],
+  ["Latente di coppia o decoder con ē_ij", "Propagare anche un latente per coppia con lo stesso generatore, oppure aggiungere un termine che legga ē_ij nel decoder di Ê, così la correlazione iniziale non passa solo dai latenti di sito.", "pair_latent"],
   ["Esperimento discriminante a basso costo", "Addestrare tre varianti brevi: stesso modello con dataset ×2; d_e = 64; e coppie con attenzione temporale. Se solo l'ultima abbassa l'errore relativo su Ĵ, il collo di bottiglia è architetturale."],
 ];
 

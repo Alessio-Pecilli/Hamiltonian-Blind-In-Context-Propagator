@@ -527,7 +527,8 @@ function renderRel() {
 function dims() {
   const r = curRun(), s = D.sample;
   const m = (r && r.config.model) || { d: 128, de: 32, nh: 4, L: 3, m: 32, K: 32 }, t = (r && r.config.train) || { n: 8, H: 16 };
-  return { n: s ? s.n : t.n, d: m.d, de: m.de, nh: m.nh, L: m.L, m: m.m, K: m.K, T: s ? s.T : 32, H: s ? s.H : t.H };
+  return { n: s ? s.n : t.n, d: m.d, de: m.de, nh: m.nh, L: m.L, m: m.m, K: m.K, T: s ? s.T : 32, H: s ? s.H : t.H,
+    pair_attn: !!m.pair_attn, triangle: !!m.triangle, pair_latent: m.pair_latent || 0 };
 }
 function renderModelInfo() {
   const dm = dims();
@@ -605,8 +606,9 @@ function renderTraceSide(dm, i, j, pg) {
     }
   }
   const valsHTML = vals ? `<table class="vals">${vals.map(([k, v]) => `<tr><td>${k}</td><td class="mono">${v}</td></tr>`).join("")}</table>` : `<p class="cap">Nessuna traiettoria di esempio nei dati caricati.</p>`;
-  const asym = MI.ASYMMETRY.map(([t, d, src]) => `<li><b>${esc(t)}.</b> ${esc(d)} <span class="mono src">${esc(src)}</span></li>`).join("");
-  const cand = MI.CANDIDATES.map(([t, d]) => `<li><b>${esc(t)}.</b> ${esc(d)}</li>`).join("");
+  const optPill = (opt) => { if (!opt) return ""; const on = !!dm[opt]; return ` <span class="pill ${on ? "good" : "na"}">${on ? "affrontato da" : "affrontabile con"} ${opt}${on ? " (attivo)" : ""}</span>`; };
+  const asym = MI.ASYMMETRY.map(([t, d, src, opt]) => `<li><b>${esc(t)}.</b> ${esc(d)} <span class="mono src">${esc(src)}</span>${optPill(opt)}</li>`).join("");
+  const cand = MI.CANDIDATES.map(([t, d, opt]) => `<li><b>${esc(t)}.</b> ${esc(d)}${opt ? ` <span class="pill ${dm[opt] ? "good" : "na"}">${dm[opt] ? "implementato, attivo" : "implementato, non attivo in questa run"}: ${opt}</span>` : ""}</li>`).join("");
   $("traceSide").innerHTML = `
     <h3>Dove finisce nell'esempio ${traceKind === "node" ? `il sito ${i}` : `la coppia (${i}, ${j})`}</h3>${valsHTML}
     <h3>Dove sta la capacità ${tm("pgroups", "(parametri per gruppo)")}</h3>
@@ -615,7 +617,7 @@ function renderTraceSide(dm, i, j, pg) {
     <h3>Perché le coppie potrebbero imparare meno dei nodi</h3>
     <p class="cap">Fatti verificabili nel codice, non diagnosi sicure: spiegano perché l'architettura attuale dà più strumenti ai nodi che alle coppie.</p>
     <ul class="bul">${asym}</ul>
-    <h3>Interventi candidati (non ancora implementati)</h3><ul class="bul">${cand}</ul>`;
+    <h3>Interventi candidati</h3><ul class="bul">${cand}</ul>`;
   if (!pg) { setEmpty("cParams", "Conteggio per gruppo non presente in questo export (serve il checkpoint)"); $("pgSummary").textContent = ""; return; }
   const ent = Object.entries(pg).map(([k, v]) => ({ k, v, l: (PG_LABEL[k] || [k, "other"])[0], role: (PG_LABEL[k] || [k, "other"])[1] })).sort((a, b) => b.v - a.v);
   const col = (role) => (role === "node" ? css("--s1") : role === "pair" ? css("--s2") : css("--ink-3"));
