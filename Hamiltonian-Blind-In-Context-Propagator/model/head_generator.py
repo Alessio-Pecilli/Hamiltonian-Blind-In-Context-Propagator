@@ -20,9 +20,10 @@ def symmetrize_edge_channels(x: torch.Tensor) -> torch.Tensor:
 
 
 class GeneratorHead(nn.Module):
-    def __init__(self, d: int, de: int, m: int, K: int, basis_std: float = 0.02, use_S: bool = True):
+    def __init__(self, d: int, de: int, m: int, K: int, basis_std: float = 0.02, use_S: bool = True,
+                 pair_latent: int = 0):
         super().__init__()
-        self.m, self.K, self.use_S = m, K, use_S
+        self.m, self.K, self.use_S, self.p = m, K, use_S, pair_latent
         self.w_theta = nn.Linear(d, K)
         self.w_z = nn.Linear(d, m)
         self.A_basis = nn.Parameter(torch.randn(K, m, m) * basis_std)
@@ -35,6 +36,14 @@ class GeneratorHead(nn.Module):
         self.D_n = nn.Linear(m, 3)
         self.B = nn.Parameter(torch.randn(9, m, m) / m)
         self.beta = nn.Parameter(torch.zeros(9))
+        if pair_latent:  # per-pair latent u_ij in R^p, rotated by its own skew generator C_ij(e_ij)
+            self.w_u = nn.Linear(de, pair_latent)
+            self.w_C = nn.Linear(de, pair_latent * pair_latent)
+            nn.init.zeros_(self.w_C.weight)  # start with frozen pair latents (C = 0)
+            nn.init.zeros_(self.w_C.bias)
+            self.D_u = nn.Linear(pair_latent, 9)
+            nn.init.zeros_(self.D_u.weight)  # start as the model without pair latent
+            nn.init.zeros_(self.D_u.bias)
 
     # ------------------------------------------------------------------
     def generator(self, h: torch.Tensor, e: torch.Tensor):
@@ -59,11 +68,13 @@ class GeneratorHead(nn.Module):
         S_F = S_b.flatten(1).norm(dim=-1) * n ** 0.5                          # ||blockdiag||_F
         return G, theta, gate, S_F
 
-    def decode(self, z: torch.Tensor):
-        """z (..., n, m) -> node (..., n, 3), edge (..., n, n, 9)."""
+    def decode(self, z: torch.Tensor, u: torch.Tensor | None = None):
+        """z (..., n, m) [, pair latents u (..., n, n, p)] -> node (..., n, 3), edge (..., n, n, 9)."""
         node = torch.tanh(self.D_n(z))
         zB = torch.einsum("...im,cmk->...ick", z, self.B)
         x = torch.einsum("...ick,...jk->...ijc", zB, z)
+        if u is not None:
+            x = x + self.D_u(u)
         edge = torch.tanh(symmetrize_edge_channels(x + self.beta))  # beta inside: symmetry holds exactly
         return node, edge
 
@@ -80,5 +91,20 @@ class GeneratorHead(nn.Module):
             Z = (P @ Z[..., None]).squeeze(-1)
             zs.append(Z)
         z = torch.stack(zs, 1).view(N, horizon, n, self.m)
-        node, edge = self.decode(z)
+        u = self.pair_rollout(e, dt, horizon) if self.p else None
+        node, edge = self.decode(z, u)
         return dict(node=node, edge=edge, theta=theta, gate=gate, S_F=S_F, G=G, z=z)
+
+    def pair_rollout(self, e: torch.Tensor, dt: torch.Tensor, horizon: int) -> torch.Tensor:
+        """u_ij(k) = exp(k dt C_ij) u_ij(0), C_ij = B_ij - B_ij^T (stable): (N, H, n, n, p)."""
+        N, n, _, _ = e.shape
+        p = self.p
+        Bm = self.w_C(e).view(N, n, n, p, p)
+        C = Bm - Bm.transpose(-1, -2)
+        P = torch.linalg.matrix_exp(dt[:, None, None, None, None] * C)
+        U = self.w_u(e)
+        us = []
+        for _ in range(horizon):
+            U = (P @ U[..., None]).squeeze(-1)
+            us.append(U)
+        return torch.stack(us, 1)

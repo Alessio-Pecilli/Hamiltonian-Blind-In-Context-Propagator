@@ -27,6 +27,9 @@ def make_model(cfg, head="A"):
     m = Propagator(cfg).double().eval()
     if head == "A":  # W_A is zero-initialised: perturb so that the coupling path is tested
         torch.nn.init.normal_(m.head.w_A.weight, std=0.05)
+        if m.head.p:  # zero-initialised too: perturb so that the pair latent path is tested
+            torch.nn.init.normal_(m.head.w_C.weight, std=0.3)
+            torch.nn.init.normal_(m.head.D_u.weight, std=0.3)
     return m
 
 
@@ -147,3 +150,47 @@ def test_generator_without_dissipation_is_skew():
     P = torch.linalg.matrix_exp(0.1 * G)
     Z = torch.randn(3, 30).double()
     assert torch.allclose((P @ Z[..., None]).squeeze(-1).norm(dim=-1), Z.norm(dim=-1), atol=1e-9)
+
+
+def test_new_pair_components_are_active(tiny_cfg):
+    """The three architecture options are on in the default config and change the output."""
+    assert tiny_cfg["model"]["pair_attn"] and tiny_cfg["model"]["triangle"] and tiny_cfg["model"]["pair_latent"]
+    node, edge, dt = random_inputs(1, 12, 5)
+    node, edge, dt = node.double(), edge.double(), dt.double()
+    args = (node, edge, dt, torch.tensor([[11]]), torch.tensor([11]))
+    out = {}
+    for name, off in (("all", {}), ("no_pair_attn", {"pair_attn": False}), ("no_triangle", {"triangle": False}),
+                      ("no_latent", {"pair_latent": 0})):
+        cfg = copy.deepcopy(tiny_cfg)
+        cfg["model"].update(off)
+        torch.manual_seed(0)
+        m = Propagator(cfg).double().eval()
+        torch.nn.init.normal_(m.head.w_A.weight, std=0.05)
+        if m.head.p:
+            torch.nn.init.normal_(m.head.w_C.weight, std=0.3); torch.nn.init.normal_(m.head.D_u.weight, std=0.3)
+        with torch.no_grad():
+            out[name] = m(*args)["edge"]
+    for k in ("no_pair_attn", "no_triangle", "no_latent"):
+        assert not torch.allclose(out["all"], out[k], atol=1e-6), k
+
+
+def test_options_off_gives_the_old_parameter_set(tiny_cfg):
+    cfg = copy.deepcopy(tiny_cfg)
+    cfg["model"].update(pair_attn=False, triangle=False, pair_latent=0)
+    keys = Propagator(cfg).state_dict().keys()
+    assert not any(k for k in keys if ".pa_" in k or ".tri_" in k or "head.w_u" in k or "head.w_C" in k or "head.D_u" in k)
+
+
+def test_pair_latent_keeps_edge_symmetry_and_is_stable():
+    torch.manual_seed(3)
+    head = GeneratorHead(d=16, de=8, m=6, K=5, pair_latent=4).double()
+    for w in (head.w_C.weight, head.D_u.weight):
+        torch.nn.init.normal_(w, std=1.0)
+    h = torch.randn(2, 5, 16).double()
+    e = torch.randn(2, 5, 5, 8).double()
+    e = 0.5 * (e + e.transpose(1, 2))
+    out = head(h, e, torch.full((2,), 0.1).double(), horizon=7)
+    swap = [3 * b + a for a in range(3) for b in range(3)]
+    assert torch.allclose(out["edge"], out["edge"].transpose(-2, -3)[..., swap], atol=1e-12)
+    u = head.pair_rollout(e, torch.full((2,), 0.1).double(), 30)
+    assert (u.norm(dim=-1) <= u[:, 0:1].norm(dim=-1) * (1 + 1e-9) + 1e-9).all()  # skew generator: norm kept

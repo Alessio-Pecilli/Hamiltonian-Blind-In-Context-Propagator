@@ -21,10 +21,12 @@ class Propagator(nn.Module):
         self.head_type = m.get("head", "A")
         self.horizon = cfg["train"]["H"]
         self.body = Body(m["d"], m["de"], m["nh"], m["L"], m.get("conv_kernel", 4),
-                         m.get("rope", True), m.get("checkpointing", False))
+                         m.get("rope", True), m.get("checkpointing", False),
+                         m.get("pair_attn", False), m.get("triangle", False))
         if self.head_type == "A":
             self.head = GeneratorHead(m["d"], m["de"], m["m"], m["K"], m.get("basis_std", 0.02),
-                                      m.get("use_S", True))  # absent in old configs = trained with S
+                                      m.get("use_S", True),  # absent in old configs = trained with S
+                                      m.get("pair_latent", 0))
         elif self.head_type == "B":
             self.head = FreeHead(m["d"], m["de"], self.horizon)
         else:

@@ -14,6 +14,9 @@ common:
     conv_kernel: 4
     rope: true
     basis_std: 0.02
+    pair_attn: true        # causal temporal attention on the pair features (else depthwise conv only)
+    triangle: true         # triangular update of e_ij from e_ik, e_jk
+    pair_latent: 8         # dimension of the per-pair latent propagated by the head (0 = off)
     use_S: false           # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
     bf16: true             # bf16 autocast for the body on CUDA; head always float32
     checkpointing: false

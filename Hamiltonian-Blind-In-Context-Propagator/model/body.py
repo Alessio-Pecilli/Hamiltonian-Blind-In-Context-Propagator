@@ -11,10 +11,10 @@ from model.temporal import TemporalLayer
 
 
 class Block(nn.Module):
-    def __init__(self, d, de, nh, kernel=4, use_rope=True):
+    def __init__(self, d, de, nh, kernel=4, use_rope=True, pair_attn=False, triangle=False):
         super().__init__()
-        self.spatial = SpatialLayer(d, de, nh)
-        self.temporal = TemporalLayer(d, de, nh, kernel, use_rope)
+        self.spatial = SpatialLayer(d, de, nh, triangle)
+        self.temporal = TemporalLayer(d, de, nh, kernel, use_rope, pair_attn)
 
     def forward(self, h, e, return_attn=False):
         if return_attn:
@@ -26,10 +26,11 @@ class Block(nn.Module):
 
 
 class Body(nn.Module):
-    def __init__(self, d, de, nh, L, kernel=4, use_rope=True, checkpointing=False):
+    def __init__(self, d, de, nh, L, kernel=4, use_rope=True, checkpointing=False,
+                 pair_attn=False, triangle=False):
         super().__init__()
         self.embed = Embedding(d, de)
-        self.blocks = nn.ModuleList([Block(d, de, nh, kernel, use_rope) for _ in range(L)])
+        self.blocks = nn.ModuleList([Block(d, de, nh, kernel, use_rope, pair_attn, triangle) for _ in range(L)])
         self.ln_h = nn.LayerNorm(d)
         self.ln_e = nn.LayerNorm(de)
         self.checkpointing = checkpointing

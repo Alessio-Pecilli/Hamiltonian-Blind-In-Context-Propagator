@@ -11,7 +11,7 @@ from model.embed import mlp, offdiag_mask
 
 
 class SpatialLayer(nn.Module):
-    def __init__(self, d: int, de: int, nh: int):
+    def __init__(self, d: int, de: int, nh: int, triangle: bool = False):
         super().__init__()
         assert d % nh == 0
         self.d, self.de, self.nh, self.dh = d, de, nh, d // nh
@@ -30,6 +30,14 @@ class SpatialLayer(nn.Module):
         self.w_a = nn.Linear(d, de)
         self.w_bb = nn.Linear(d, de)
         self.mlp_eu = mlp(2 * de, 4 * de, de)
+        self.triangle = triangle
+        if triangle:  # triangular update: e_ij gathers e_ik, e_jk over the third site k
+            self.tri_ln = nn.LayerNorm(de)
+            self.tri_a = nn.Linear(de, de)
+            self.tri_ag = nn.Linear(de, de)
+            self.tri_ln_o = nn.LayerNorm(de)
+            self.tri_o = nn.Linear(de, de)
+            self.tri_g = nn.Linear(de, de)
 
     def forward(self, h: torch.Tensor, e: torch.Tensor, return_attn: bool = False):
         """h (..., n, d), e (..., n, n, de). Leading dims are independent (batch, time)."""
@@ -53,4 +61,10 @@ class SpatialLayer(nn.Module):
         prod = self.w_a(x)[..., :, None, :] * self.w_bb(x)[..., None, :, :]  # (..., n, n, de)
         e = e + self.mlp_eu(torch.cat([self.ln_e2(e), prod], -1))
         e = 0.5 * (e + e.transpose(-2, -3)) * mask                   # symmetrise, e_ii = 0
+        if self.triangle:
+            x = self.tri_ln(e) * mask
+            a = self.tri_a(x) * torch.sigmoid(self.tri_ag(x)) * mask       # a_ii = 0: terms k = i, j vanish
+            t = torch.einsum("...ikc,...jkc->...ijc", a, a) / n            # symmetric in (i, j)
+            e = e + self.tri_o(self.tri_ln_o(t)) * torch.sigmoid(self.tri_g(x))
+            e = e * mask
         return (h, e, alpha) if return_attn else (h, e)

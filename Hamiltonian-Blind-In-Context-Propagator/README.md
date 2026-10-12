@@ -89,6 +89,12 @@ Large datasets: keep `data.preload=false` (HDF5 is read lazily per item).
 
 * `model.use_S: false` (default in `configs/config.yaml`): no dissipation, `G = A − Aᵀ` is skew-symmetric and `‖S‖_F = 0`;
   configs without the key keep the old behaviour (S active), so older checkpoints still load.
+* Pair-path options (`configs/config.yaml`, all on by default; configs without the keys keep the old network, so older
+  checkpoints still load; ablate with `--set model.pair_attn=false` etc.):
+  `model.pair_attn` causal temporal attention (RoPE) on every pair, besides the depthwise conv;
+  `model.triangle` triangular update `e_ij += Tri((1/n) Σ_k a_ik ⊙ a_jk)` (symmetric, gated);
+  `model.pair_latent = p` per-pair latent `u_ij`, initialised from `ē_ij` and rotated by its own skew generator
+  `C_ij(ē_ij)`, added to the pair decoder (`D_u` and `W_C` are zero-initialised: the model starts as before).
 * Fidelity F₂(k): mean over pairs i<j of the Uhlmann fidelity between the two-qubit marginal rebuilt from the prediction
   (Eq. 28, projected on the PSD cone) and the one from the true observables. The full-state fidelity is not
   defined for a model that only outputs weight-≤2 observables.
