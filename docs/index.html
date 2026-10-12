@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBICP Run Dashboard</title>
+<meta name="description" content="Dashboard delle run HBICP: previsione di osservabili quantistiche con Hamiltoniana e grafo ignoti.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>
+window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] }, svg: { fontCache: "global" }, startup: { typeset: false } };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script>
+</head>
+<body>
+<div class="shell">
+<nav class="index" aria-label="Sezioni">
+  <div class="brand">HBICP</div>
+  <div class="sub">Hamiltonian-blind in-context propagator</div>
+  <a href="#overview"><span class="n">00</span>Panoramica</a>
+  <a href="#eval"><span class="n">01</span>Valutazione</a>
+  <a href="#sample"><span class="n">02</span>Input / output</a>
+  <a href="#graph"><span class="n">03</span>Grafo inferito</a>
+  <a href="#model"><span class="n">04</span>Fisica e modello</a>
+  <a href="#training"><span class="n">05</span>Training</a>
+  <a href="#details"><span class="n">06</span>Dettagli tecnici</a>
+  <a href="#glossary"><span class="n">07</span>Glossario</a>
+  <div class="loader">
+    <label class="exportlab" for="exportSel">Export</label>
+    <select id="exportSel" aria-label="Scegli export"></select>
+    <button class="primary" id="loadBtn" type="button">Carica dashboard_data.json</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <button id="themeBtn" type="button" aria-label="Cambia tema">Tema: auto</button>
+  </div>
+</nav>
+
+<main>
+<!-- 00 ------------------------------------------------------------------------------- -->
+<section id="overview">
+  <div class="eyebrow" id="ovEyebrow">Run dashboard</div>
+  <h1>Previsione della dinamica quantistica senza conoscere l'Hamiltoniana</h1>
+  <p class="lede">Un transformer spazio-temporale legge una finestra di <span class="term" data-term="obs" tabindex="0">osservabili</span> passati <span class="term" data-term="Nt" tabindex="0">\(\langle\sigma^a_i\rangle_t\)</span>, <span class="term" data-term="Et" tabindex="0">\(\langle\sigma^a_i\sigma^b_j\rangle_t\)</span> di un sistema di <span class="term" data-term="n" tabindex="0">\(n\)</span> qubit, con Hamiltoniana e <span class="term" data-term="graph" tabindex="0">grafo</span> di interazione ignoti, e prevede i passi successivi propagando uno stato latente con un <span class="term" data-term="G" tabindex="0">generatore</span> lineare stabile appreso nel contesto.</p>
+  <div class="banner" id="sourceBanner" role="status"></div>
+  <div id="fatal" class="panel fatal" hidden></div>
+  <div class="grid g4" id="kpis"></div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3>Criteri della spec (<span class="term" data-term="kstar" tabindex="0">§7.2</span>)</h3><span class="cap">calcolati dai risultati caricati</span></div>
+      <div class="checks" id="checks"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>Curva contesto–orizzonte <span class="term" data-term="kstar" tabindex="0">\(k^\star(T)\)</span></h3><span class="cap">l'oggetto centrale dello studio</span></div>
+      <div class="legend" id="kstarLegendOv"></div>
+      <div class="chart short"><canvas id="kstarOv" aria-label="k star in funzione di T"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="T" tabindex="0">contesto T</span> (passi) · y: <span class="term" data-term="kstar" tabindex="0">k*</span></div>
+      <p class="how"><b>Come leggerlo.</b> Ogni punto è il numero di passi futuri previsti con <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span> ≤ <span class="term" data-term="eps" tabindex="0">ε</span> = 0.05, dato un contesto di T passi. Una curva che sale verso destra significa che il modello usa il contesto; una curva piatta significa che lo ignora. Più in alto è meglio.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 01 ------------------------------------------------------------------------------- -->
+<section id="eval">
+  <div class="sec-head"><span class="num">01</span><h2>Valutazione sul test set</h2><span class="spec">spec §6–7 · results.json</span></div>
+  <div class="controls">
+    <label for="resSel">Risultati <select id="resSel"></select></label>
+    <span class="label muted">Contesto <span class="term" data-term="T" tabindex="0">T</span></span>
+    <div class="seg" id="Tseg" role="group" aria-label="Lunghezza del contesto"></div>
+    <span class="label muted">Osservabili</span>
+    <div class="seg" id="NEseg" role="group" aria-label="Nodi o coppie">
+      <button type="button" data-v="rmse_n" aria-pressed="true">nodi</button><button type="button" data-v="rmse_e" aria-pressed="false">coppie</button>
+    </div>
+  </div>
+  <div class="legend" id="lgMethods"></div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3 id="rmseTitle"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub>(k)</span></h3><span class="cap">media sulle traiettorie di test</span></div>
+      <div class="chart tall"><canvas id="cRmse"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span id="rmseAxisY"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span></span> (scala log) · linea tratteggiata: <span class="term" data-term="eps" tabindex="0">ε = 0.05</span></div>
+      <p class="how"><b>Come leggerlo.</b> Ogni curva è l'errore medio a k passi dall'ultimo passo di contesto. Una curva bassa e piatta è una buona previsione; la curva sale quando la previsione si allontana dalla verità. Conta dove ogni curva attraversa la linea tratteggiata ε. Gli errori delle coppie sono tipicamente più alti di quelli dei nodi.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3><span class="term" data-term="kstar" tabindex="0">\(k^\star(T)\)</span> per metodo</h3><span class="cap">asse T in scala log₂</span></div>
+      <div class="chart tall"><canvas id="cKstar"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="T" tabindex="0">contesto T</span> · y: <span class="term" data-term="kstar" tabindex="0">k*</span></div>
+      <p class="how"><b>Come leggerlo.</b> Confronta quanti passi riesce a prevedere ogni metodo a parità di contesto. Il confronto significativo è con le baseline <span class="term" data-term="dmd1" tabindex="0">DMD</span> e <span class="term" data-term="hl" tabindex="0">HL</span>; l'<span class="term" data-term="oracle" tabindex="0">oracolo</span> è il tetto.</p>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3 id="fidTitle"><span class="term" data-term="fid2" tabindex="0">Fidelity F<sub>2</sub>(k)</span></h3><span class="cap">media su coppie e traiettorie di test</span></div>
+      <div class="chart tall"><canvas id="cFid"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span class="term" data-term="fid2" tabindex="0">fidelity ridotta F₂</span> (0–1)</div>
+      <p class="how"><b>Come leggerlo.</b> Confronto con lo stato vero: 1 significa che le coppie di qubit previste hanno gli stessi marginali dello stato vero. La curva parte vicino a 1 e scende con k; vince il metodo che resta più in alto. La fidelity cattura anche gli errori di fase e di correlazione che il solo RMSE sui valori medi nasconde. Con 0.25 una coppia è equivalente a «non so nulla».</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>Tabella riassuntiva</h3><span class="cap">in grassetto il migliore escluso l'oracolo · medie su k = 1..16</span></div>
+      <div class="tablewrap"><table id="evalTable"></table></div>
+      <p class="how"><b>Come leggerla.</b> Per ogni contesto <span class="term" data-term="T" tabindex="0">T</span>: <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span> medio, <span class="term" data-term="fidmean" tabindex="0">F̄₂</span> medio e <span class="term" data-term="kstar" tabindex="0">k*</span>. Errore più basso e fidelity più alta sono meglio. L'ultima colonna è il costo in <span class="term" data-term="sec_step" tabindex="0">secondi per passo</span>.</p>
+    </div>
+  </div>
+  <p class="cap"><span class="term" data-term="oracle" tabindex="0">Oracolo</span> = propagazione esatta con \(H\) vera e <span class="term" data-term="psi" tabindex="0">\(|\psi_T\rangle\)</span> vero (limite superiore). <span class="term" data-term="hl" tabindex="0">HL + oracolo</span> = \(J, h\) stimati dal contesto (Eq. 29) e lasso, poi propagazione esatta dallo stato vero. <span class="term" data-term="dmd1" tabindex="0">DMD</span> = mappa lineare ridge appresa sul contesto, w = 1 o 4 (<span class="term" data-term="dmd4" tabindex="0">w = 4</span>). <span class="term" data-term="persistence" tabindex="0">Persistenza</span> = ultimo osservato ripetuto.</p>
+</section>
+
+<!-- 02 ------------------------------------------------------------------------------- -->
+<section id="sample">
+  <div class="sec-head"><span class="num">02</span><h2>Esempio: input e output su una traiettoria</h2><span class="spec">una <span class="term" data-term="traj" tabindex="0">traiettoria</span> di test</span></div>
+  <p class="lede" id="sampleLede"></p>
+  <div class="controls">
+    <span class="muted label">Osservabile</span>
+    <div class="seg" id="kindSeg" role="group" aria-label="Tipo di osservabile">
+      <button type="button" data-v="node" aria-pressed="true">nodo \(\langle\sigma^a_i\rangle\)</button><button type="button" data-v="edge" aria-pressed="false">coppia \(\langle\sigma^a_i\sigma^b_j\rangle\)</button>
+    </div>
+    <label for="siteI">sito i <select id="siteI"></select></label>
+    <label for="siteJ" id="siteJwrap" hidden>sito j <select id="siteJ"></select></label>
+    <label for="chanSel">canale <select id="chanSel"></select></label>
+    <label for="xUnit">asse x <select id="xUnit"><option value="step">passo t</option><option value="time">tempo t·Δt</option></select></label>
+  </div>
+  <div class="legend" id="lgSample"></div>
+  <div class="panel">
+    <div class="ph"><h3 id="trajTitle">Traiettoria</h3><span class="cap">zona ombreggiata = contesto dato in input · a destra = previsione</span></div>
+    <div class="chart tall"><canvas id="cTraj"></canvas></div>
+    <div class="axes">x: passo <span class="term" data-term="T" tabindex="0">t</span> o tempo t·<span class="term" data-term="dt" tabindex="0">Δt</span> · y: valore di <span class="term" data-term="obs" tabindex="0">osservabile</span> in [−1, 1]</div>
+    <p class="how"><b>Come leggerlo.</b> La linea nera piena è il contesto che il modello riceve; la tratteggiata è la verità futura. Una buona previsione la segue il più a lungo possibile. Le baseline <span class="term" data-term="oracle" tabindex="0">oracolo</span> e <span class="term" data-term="hl" tabindex="0">HL</span> seguono la verità; il modello e la <span class="term" data-term="dmd1" tabindex="0">DMD</span> se ne distaccano quando l'informazione del contesto si esaurisce.</p>
+  </div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3><span class="term" data-term="fidtraj" tabindex="0">Fidelity con lo stato vero</span></h3><span class="cap">su questa traiettoria</span></div>
+      <div class="chart short"><canvas id="cSampleFid"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span class="term" data-term="fid2" tabindex="0">F₂</span> (0–1)</div>
+      <p class="how"><b>Come leggerlo.</b> Come nel pannello di valutazione ma per una sola traiettoria, mediata sulle coppie di qubit. La fidelity vicina a 1 vuol dire stato previsto indistinguibile da quello vero; il momento in cui scende sotto ~0.9 è dove la previsione smette di essere utile.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>Errore su questa traiettoria</h3><span class="cap"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub>(k)</span></span></div>
+      <div class="chart short"><canvas id="cSampleErr"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">k</span> · y: <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span> (scala log)</div>
+      <p class="how"><b>Come leggerlo.</b> Errore sui nodi di questa sola traiettoria. Più basso è meglio; a differenza della media di test può avere picchi dovuti a questa realizzazione.</p>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3><span class="term" data-term="energy" tabindex="0">Energia ⟨H⟩</span> dagli osservabili</h3><span class="cap">conservata esattamente dalla dinamica vera</span></div>
+      <div class="chart short"><canvas id="cEnergy"></canvas></div>
+      <div class="axes">x: passo o tempo · y: <span class="term" data-term="energy" tabindex="0">⟨H⟩</span></div>
+      <p class="how"><b>Come leggerlo.</b> La linea nera è piatta perché l'energia si conserva. Una previsione che deriva verso l'alto o il basso viola la fisica anche se l'errore puntuale è piccolo.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3><span class="term" data-term="lammin" tabindex="0">\(\min_{i&lt;j}\lambda_\text{min}(\hat\rho_{ij})\)</span></h3><span class="cap">&lt; 0 = predizione non fisica</span></div>
+      <div class="chart short"><canvas id="cLam"></canvas></div>
+      <div class="axes">x: passo o tempo · y: <span class="term" data-term="lammin" tabindex="0">λ_min</span> della matrice densità ricostruita <span class="term" data-term="rho" tabindex="0">ρ̂</span></div>
+      <p class="how"><b>Come leggerlo.</b> Sopra la linea rossa (zero) la previsione corrisponde a uno stato quantistico valido; sotto è non fisica. <span class="term" data-term="Lphys" tabindex="0">L<sub>phys</sub></span> spinge verso lo zero.</p>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><h3>Tutti i siti a colpo d'occhio: <span class="term" data-term="Nt" tabindex="0">\(\langle\sigma^z_i\rangle(t)\)</span></h3>
+      <div class="controls"><label for="stripMethod">previsione di <select id="stripMethod"></select></label><label for="stripChan">canale <select id="stripChan"><option value="2">z</option><option value="0">x</option><option value="1">y</option></select></label></div></div>
+    <div class="grid g3">
+      <div class="heatwrap"><span class="eyebrow">Verità</span><canvas class="strip" id="stTrue"></canvas></div>
+      <div class="heatwrap"><span class="eyebrow" id="stPredLbl">Previsione</span><canvas class="strip" id="stPred"></canvas></div>
+      <div class="heatwrap"><span class="eyebrow">Errore assoluto</span><canvas class="strip" id="stErr"></canvas></div>
+    </div>
+    <div class="axes">righe: siti i · colonne: passi <span class="term" data-term="T" tabindex="0">t</span> · colore: <span class="term" data-term="Nt" tabindex="0">N_t[i,a]</span></div>
+    <p class="how"><b>Come leggerlo.</b> Righe = siti, colonne = passi temporali (contesto a sinistra della linea nera, previsione a destra). Blu = −1, neutro = 0, arancio = +1; nell'errore, neutro = 0 e scuro ≥ 0.5. Una buona previsione ha il pannello centrale uguale al primo e il terzo chiaro.</p>
+  </div>
+</section>
+
+<!-- 03 ------------------------------------------------------------------------------- -->
+<section id="graph">
+  <div class="sec-head"><span class="num">03</span><h2>Grafo inferito</h2><span class="spec">spec §3.6, §3.8, §6.3–6.5</span></div>
+  <p class="lede">Il modello non riceve mai il grafo né <span class="term" data-term="Jij" tabindex="0">\(J\)</span>, <span class="term" data-term="hi" tabindex="0">\(h\)</span>. Qui si confronta la verità della traiettoria di esempio con ciò che il modello ne ricava: il <span class="term" data-term="gate" tabindex="0">gate \(g_{ij}\)</span>, l'<span class="term" data-term="alpha" tabindex="0">attenzione spaziale media \(\bar\alpha_{ij}\)</span> e il <span class="term" data-term="probe_J" tabindex="0">probe \(\hat J_{ij}\)</span>.</p>
+  <div class="grid g4" id="heats"></div>
+  <p class="how"><b>Come leggerle.</b> Ogni matrice ha i siti sulle righe e sulle colonne; più scura = punteggio più alto. Il contorno arancio marca gli archi veri: se il modello ha capito il grafo, le celle scure coincidono con i contorni. L'<span class="term" data-term="auroc" tabindex="0">AUROC</span> sotto ogni matrice riassume quanto bene il punteggio separa archi veri e non archi su questa traiettoria.</p>
+  <div class="panel">
+    <div class="ph"><h3>Locale contro globale: errore relativo del probe</h3><span class="cap">errore del probe diviso la varianza del bersaglio</span></div>
+    <div class="legend" id="lgRel"></div>
+    <div class="chart"><canvas id="cRel"></canvas></div>
+    <div class="axes">x: <span class="term" data-term="step" tabindex="0">step di training</span> · y: MSE del probe / varianza del bersaglio (<span class="term" data-term="probe_h" tabindex="0">ĥ</span>, <span class="term" data-term="probe_J" tabindex="0">Ĵ</span>); 1 = come predire la media</div>
+    <p class="how"><b>Come leggerlo.</b> Un valore di 1 significa che il lettore non fa meglio di un predittore costante; vicino a 0 significa che l'informazione è letta bene. Se la curva dei campi <span class="term" data-term="hi" tabindex="0">h</span> (locale, per sito) scende e quella degli accoppiamenti <span class="term" data-term="Jij" tabindex="0">J</span> (globale, per coppia) resta vicina a 1, il modello codifica bene i siti ma non le coppie. Nota: l'errore su J è calcolato su <i>tutte</i> le coppie i≠j, comprese quelle senza arco (J = 0).</p>
+  </div>
+  <div class="grid g2">
+    <div class="panel"><div class="ph"><h3>Probe: <span class="term" data-term="probe_J" tabindex="0">\(\hat J_{ij}\)</span> contro <span class="term" data-term="Jij" tabindex="0">\(J_{ij}\)</span></h3><span class="cap">tutte le coppie; archi veri evidenziati</span></div><div class="chart"><canvas id="cProbeJ"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="Jij" tabindex="0">J vero</span> · y: <span class="term" data-term="probe_J" tabindex="0">Ĵ probe</span></div>
+      <p class="how"><b>Come leggerlo.</b> Se il modello avesse imparato J, i punti starebbero sulla diagonale tratteggiata. Una nuvola orizzontale significa che Ĵ non dipende da J.</p></div>
+    <div class="panel"><div class="ph"><h3><span class="term" data-term="spectrum" tabindex="0">Spettro di \(G_t\)</span></h3><span class="cap" id="eigCap"></span></div><div class="chart"><canvas id="cEig"></canvas></div>
+      <div class="axes">x: Re λ (<span class="term" data-term="rot" tabindex="0">smorzamento</span>) · y: Im λ (frequenze)</div>
+      <p class="how"><b>Come leggerlo.</b> Ogni punto è un autovalore del generatore. Devono stare a sinistra o sulla linea rossa (Re λ ≤ 0): significa che il rollout non esplode. Punti sull'asse verticale = oscillazione pura, tipica di un sistema chiuso. La spaziatura verticale indica le frequenze che il modello ha appreso.</p></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><h3>Diagnostica del modello</h3><span class="cap">test set</span></div>
+    <div class="tablewrap"><table id="diagTable"></table></div>
+    <p class="how"><b>Come leggerla.</b> <span class="term" data-term="auroc" tabindex="0">AUROC</span> vicino a 1 = grafo recuperato (atteso &gt; 0.9). <span class="term" data-term="r2" tabindex="0">R²</span> vicino a 1 = valori di J e h letti bene; ≤ 0 = non meglio della media. <span class="term" data-term="SF" tabindex="0">‖S‖<sub>F</sub></span> = 0 se la dissipazione è disattivata.</p>
+  </div>
+</section>
+
+<!-- 04 ------------------------------------------------------------------------------- -->
+<section id="model">
+  <div class="sec-head"><span class="num">04</span><h2>Fisica e modello</h2><span class="spec">spec §1–4</span></div>
+  <p class="lede">Lo stato <span class="term" data-term="psi" tabindex="0">\(|\psi_t\rangle\)</span> non è mai osservato. Il modello vede solo i valori di aspettazione delle stringhe di Pauli di peso ≤ 2, cioè <span class="term" data-term="M" tabindex="0">\(M = 3n + 9\,n(n-1)/2\)</span> numeri reali per passo (<span class="mono" id="Mval">M = 288 per n = 8</span>).</p>
+  <div class="grid g2">
+    <div class="panel">
+      <h3>Sistema e dati</h3>
+      <div class="eqlist">
+        <div class="eq"><div class="math">\[ H = -\sum_{(i,j)\in E} J_{ij}\, Z_i Z_j \;-\; \sum_{i=1}^{n} h_i\, X_i \]</div><span class="tag">(3)</span>
+          <div class="ex">Ising in campo trasverso su <span class="term" data-term="graph" tabindex="0">grafo</span> casuale Erdős–Rényi \(G(n,p)\), \(p = 3/(n-1)\), connesso. <span class="term" data-term="Jij" tabindex="0">\(J_{ij}\)</span>, <span class="term" data-term="hi" tabindex="0">\(h_i\)</span> \(\sim \mathcal U[0.5, 1.5]\).</div></div>
+        <div class="eq"><div class="math">\[ |\psi_0\rangle = \bigotimes_i \Big(\cos\tfrac{\vartheta_i}{2}|0\rangle + e^{i\varphi_i}\sin\tfrac{\vartheta_i}{2}|1\rangle\Big),\quad \cos\vartheta_i\sim\mathcal U[-1,1] \]</div><span class="tag">§2.2</span>
+          <div class="ex">Stati prodotto Haar-casuali: basso entanglement iniziale, setting di quench standard.</div></div>
+        <div class="eq"><div class="math">\[ |\psi_t\rangle = e^{-iH\Delta t}\,|\psi_{t-1}\rangle,\qquad \Delta t = 0.1,\ \hbar = 1 \]</div><span class="tag">§2.3</span>
+          <div class="ex">Evoluzione esatta con <span class="term" data-term="dt" tabindex="0">\(\Delta t\)</span>; controlli numerici: norma 1 ed <span class="term" data-term="energy" tabindex="0">energia</span> conservata.</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Compito</h3>
+      <div class="math">\[ \big(o_0,\dots,o_T,\ \Delta t\big)\ \longmapsto\ \big(\hat o_{T+1},\dots,\hat o_{T+H}\big),\qquad o_t = (N_t, E_t) \]</div>
+      <p class="cap">Dati <span class="term" data-term="obs" tabindex="0">gli osservabili</span> di <span class="term" data-term="T" tabindex="0">\(T\)</span> passi passati, prevedere i prossimi <span class="term" data-term="H" tabindex="0">\(H\)</span>. Anche con \(H\) esatta, il futuro non è determinato da \(o_T\): senza <span class="term" data-term="psi" tabindex="0">\(|\psi_T\rangle\)</span> non si può propagare, e \(o_{t+1}\) dipende da correlatori di peso 3 non presenti in \(o_t\). Il modello deve estrarre dalla finestra passata sia la dinamica sia l'informazione sullo stato nascosto, per questo non è Hamiltonian learning (<span class="term" data-term="heis" tabindex="0">Eq. 29</span>).</p>
+    </div>
+  </div>
+
+  <h3 class="subhead">Tracciatore: dove vanno a finire nodi e coppie</h3>
+  <p class="lede">Scegli un sito o una coppia e segui il suo percorso nella rete, dallo strato di ingresso fino alla loss. Per ogni stadio vedi la forma del tensore (con le dimensioni della run selezionata), cosa gli viene mescolato e da chi, e dove i due percorsi, <span class="term" data-term="nodepath" tabindex="0">nodo</span> e <span class="term" data-term="nodepath" tabindex="0">coppia</span>, si scambiano informazione.</p>
+  <div class="controls" id="traceCtl">
+    <span class="muted label">Segui</span>
+    <div class="seg" id="traceKind" role="group" aria-label="Oggetto da tracciare">
+      <button type="button" data-v="node" aria-pressed="true">un sito (nodo)</button><button type="button" data-v="pair" aria-pressed="false">una coppia (arco)</button>
+    </div>
+    <label for="traceI">sito i <select id="traceI"></select></label>
+    <label for="traceJ" id="traceJwrap" hidden>sito j <select id="traceJ"></select></label>
+  </div>
+  <div class="grid g2 trace">
+    <div class="panel"><div class="flow" id="traceFlow"></div></div>
+    <div class="panel" id="traceSide"></div>
+  </div>
+
+  <h3 class="subhead">Equazioni chiave e coefficienti</h3>
+  <p class="lede">Ogni equazione è seguita dalla definizione dei suoi simboli; passa il mouse (o tocca) su un simbolo colorato per la sua definizione completa. I numeri tra parentesi sono quelli della spec.</p>
+  <div class="grid g2" id="eqGrid"></div>
+
+  <h3 class="subhead">La loss: come si calcola ogni termine</h3>
+  <p class="lede">La loss totale è la somma di quattro termini, ma non tutti addestrano il modello allo stesso modo. Per ciascuno: formula, come si calcola passo per passo, e se il suo gradiente arriva al corpo della rete.</p>
+  <div class="panel">
+    <div class="math">\[ \mathcal L=\mathcal L_\text{pred}+\lambda_\text{phys}\mathcal L_\text{phys}+\lambda_\text{probe}\mathcal L_\text{probe}+\lambda_\theta\|\theta\|^2 \]</div>
+    <p class="cap">Pesi della run selezionata: <span class="term" data-term="lam" tabindex="0">λ<sub>phys</sub> / λ<sub>probe</sub> / λ<sub>θ</sub></span> = <span class="mono" id="lamVals">0.1 / 1 / 1e-4</span>.</p>
+  </div>
+  <div class="grid g2" id="lossGrid"></div>
+  <div class="panel">
+    <div class="ph"><h3>Contributo di ogni termine alla loss (ultimo step registrato)</h3><span class="cap" id="contribNote"></span></div>
+    <div class="tablewrap"><table id="contribTable"></table></div>
+    <p class="how"><b>Come leggerla.</b> «Contributo» è peso × valore, la quantità realmente sommata alla <span class="term" data-term="Ltot" tabindex="0">loss totale</span>. «Gradiente al corpo» dice se il termine modifica i pesi della rete: <span class="term" data-term="Lprobe" tabindex="0">L<sub>probe</sub></span> no, perché lavora su feature scollegate (stop-gradient). Per giudicare l'apprendimento guarda <span class="term" data-term="Lpred" tabindex="0">L<sub>pred</sub></span>, non la loss totale.</p>
+  </div>
+</section>
+
+<!-- 05 ------------------------------------------------------------------------------- -->
+<section id="training">
+  <div class="sec-head"><span class="num">05</span><h2>Training</h2><span class="spec">spec §5 · log.jsonl</span></div>
+  <div class="controls">
+    <label for="runSel">Run <select id="runSel"></select></label>
+    <label for="smoothSel">Smoothing <select id="smoothSel"><option value="0">nessuno</option><option value="0.6" selected>EMA 0.6</option><option value="0.9">EMA 0.9</option></select></label>
+  </div>
+  <div class="grid g2" id="trainGrid">
+    <div class="panel"><div class="ph"><h3><span class="term" data-term="Ltot" tabindex="0">Loss totale</span> e <span class="term" data-term="Lpred" tabindex="0">\(\mathcal L_\text{pred}\)</span></h3><span class="cap">scala log</span></div><div class="legend" id="lgLoss"></div><div class="chart"><canvas id="cLoss"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="Ltot" tabindex="0">loss</span> (log)</div>
+      <p class="how"><b>Come leggerlo.</b> <span class="term" data-term="Lpred" tabindex="0">L<sub>pred</sub></span> (arancio) è l'errore di previsione e deve scendere. La loss totale (blu) può restare alta perché contiene <span class="term" data-term="Lprobe" tabindex="0">L<sub>probe</sub></span>, che non addestra il corpo: non preoccuparti se i due valori sono lontani.</p></div>
+    <div class="panel"><div class="ph"><h3>Contributi pesati alla loss</h3><span class="cap">peso × valore, scala log</span></div><div class="legend" id="lgContrib"></div><div class="chart"><canvas id="cContrib"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="lam" tabindex="0">λ</span> × termine</div>
+      <p class="how"><b>Come leggerlo.</b> Mostra quanto pesa davvero ogni termine nella somma. Un termine molto sotto <span class="term" data-term="Lpred" tabindex="0">L<sub>pred</sub></span> (per esempio <span class="term" data-term="Ltheta" tabindex="0">‖θ‖²</span> con λ = 10⁻⁴) ha effetto trascurabile.</p></div>
+    <div class="panel"><div class="ph"><h3>Probe: <span class="term" data-term="probe_h" tabindex="0">\(h\)</span>, <span class="term" data-term="probe_J" tabindex="0">\(J\)</span>, <span class="term" data-term="probe_a" tabindex="0">adiacenza</span></h3><span class="cap">stop-grad: misura, non influenza il corpo</span></div><div class="legend" id="lgProbe"></div><div class="chart"><canvas id="cProbe"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: errore del <span class="term" data-term="probe" tabindex="0">probe</span> (log)</div>
+      <p class="how"><b>Come leggerlo.</b> Se l'errore scende, l'informazione sull'Hamiltoniana diventa leggibile nelle feature. Un errore che resta piatto indica che quella grandezza non è codificata (si veda la versione normalizzata nella sezione Grafo inferito).</p></div>
+    <div class="panel"><div class="ph"><h3><span class="term" data-term="Lphys" tabindex="0">\(\mathcal L_\text{phys}\)</span></h3><span class="cap">negatività di <span class="term" data-term="rho" tabindex="0">\(\hat\rho_{ij}\)</span>, deve andare a 0</span></div><div class="chart short"><canvas id="cPhys"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="Lphys" tabindex="0">L_phys</span></div>
+      <p class="how"><b>Come leggerlo.</b> Vicino a zero = previsioni compatibili con uno stato quantistico. Valori alti e persistenti indicano nodi e coppie previsti in contraddizione tra loro.</p></div>
+    <div class="panel"><div class="ph"><h3><span class="term" data-term="SF" tabindex="0">\(\|S\|_F\)</span></h3><span class="cap" id="sfCap">gauge di dissipazione, atteso → 0 su sistema chiuso</span></div><div class="chart short"><canvas id="cSF"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="SF" tabindex="0">‖S‖_F</span></div>
+      <p class="how"><b>Come leggerlo.</b> Su dati di sistema chiuso deve tendere a 0. Un valore alto e costante vuol dire che il modello non sta spegnendo la dissipazione: per questo è stata aggiunta l'opzione <span class="mono">model.use_S = false</span>, con cui vale 0 per costruzione.</p></div>
+  </div>
+</section>
+
+<!-- 06 ------------------------------------------------------------------------------- -->
+<section id="details">
+  <div class="sec-head"><span class="num">06</span><h2>Dettagli tecnici</h2><span class="spec">chiusi di default</span></div>
+  <details class="panel"><summary><span class="term" data-term="lr" tabindex="0">Learning rate</span></summary>
+    <div class="chart short"><canvas id="cLr"></canvas></div>
+    <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="lr" tabindex="0">lr</span></div>
+    <p class="how"><b>Come leggerlo.</b> Rampa lineare nel <span class="term" data-term="warmup" tabindex="0">warm-up</span>, poi <span class="term" data-term="cosine" tabindex="0">decadimento a coseno</span> verso il minimo. Deve coincidere con la schedule configurata.</p></details>
+  <details class="panel"><summary><span class="term" data-term="gradnorm" tabindex="0">Norma del gradiente</span></summary>
+    <div class="chart short"><canvas id="cGn"></canvas></div>
+    <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="gradnorm" tabindex="0">‖∇‖</span> prima del <span class="term" data-term="clipping" tabindex="0">clipping</span> a 1.0</div>
+    <p class="how"><b>Come leggerlo.</b> Valori sopra la soglia di clipping vengono riscalati. Picchi isolati sono normali; una salita continua segnala instabilità.</p></details>
+  <details class="panel"><summary>Validazione durante il training</summary>
+    <div class="tablewrap"><table id="valTable"></table></div>
+    <p class="how"><b>Come leggerla.</b> Ogni <span id="evalEvery">5000</span> step si valuta su un sottoinsieme del set di validazione, per vari <span class="term" data-term="T" tabindex="0">T</span>: <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub>(1)</span> sul primo passo, RMSE<sub>n</sub>(H) all'ultimo, <span class="term" data-term="kstar" tabindex="0">k*</span>, <span class="term" data-term="auroc" tabindex="0">AUROC</span> del gate e dell'attenzione, <span class="term" data-term="r2" tabindex="0">R²</span> dei probe e <span class="term" data-term="SF" tabindex="0">‖S‖<sub>F</sub></span>.</p></details>
+  <details class="panel"><summary>Iperparametri della run selezionata</summary>
+    <p class="cap" id="paramNote"></p>
+    <div class="tablewrap"><table id="hpTable"></table></div></details>
+  <details class="panel"><summary>Config completa della run (config.json)</summary><pre class="code" id="cfgJson"></pre></details>
+  <details class="panel"><summary>Dataset e provenienza</summary>
+    <div class="grid g2">
+      <div><h3>Dataset</h3><div class="tablewrap"><table id="dsTable"></table></div></div>
+      <div><h3>Provenienza</h3><dl class="kv" id="prov"></dl></div>
+    </div>
+    <footer id="foot"></footer></details>
+  <details class="panel"><summary>Come pubblicare una nuova versione</summary>
+    <p class="cap">Dalla cartella del codice, dopo training e valutazione: esporta, aggiorna <span class="mono">docs/data/index.json</span>, fa commit e push.</p>
+<pre class="code">python -m tools.publish_dashboard --label "n8 senza S" --notes "use_S=false" \
+    --runs runs --results results --data datasets/n8/test.h5 \
+    --ckpt runs/local_A/last.pt --T 32 --horizon 64 --sample 0</pre></details>
+</section>
+
+<!-- 07 ------------------------------------------------------------------------------- -->
+<section id="glossary">
+  <div class="sec-head"><span class="num">07</span><h2>Glossario</h2><span class="spec" id="glossCount"></span></div>
+  <p class="lede">Tutte le quantità della pagina, in ordine alfabetico. Le stesse definizioni compaiono nei popup sui termini sottolineati a puntini.</p>
+  <div class="controls"><label for="glossFilter">Filtra <input id="glossFilter" type="search" placeholder="cerca un simbolo o un nome"></label></div>
+  <div class="glossary" id="glossList"></div>
+</section>
+</main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script src="glossary.js"></script>
+<script src="model-info.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
