@@ -14,6 +14,7 @@ common:
     conv_kernel: 4
     rope: true
     basis_std: 0.02
+    use_S: false           # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
     bf16: true             # bf16 autocast for the body on CUDA; head always float32
     checkpointing: false
   loss:

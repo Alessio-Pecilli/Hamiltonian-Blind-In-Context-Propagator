@@ -133,3 +133,17 @@ def test_edge_decoder_symmetric_with_asymmetric_beta():
     _, edge = head.decode(z)
     swap = [3 * b + a for a in range(3) for b in range(3)]
     assert torch.allclose(edge, edge.transpose(-2, -3)[..., swap], atol=1e-12)
+
+
+def test_generator_without_dissipation_is_skew():
+    """use_S=False: G = A - A^T exactly, S_F = 0, the latent norm is conserved."""
+    torch.manual_seed(2)
+    head = GeneratorHead(d=16, de=8, m=6, K=5, basis_std=0.5, use_S=False).double()
+    torch.nn.init.normal_(head.w_A.weight, std=1.0)
+    h, e = torch.randn(3, 5, 16).double(), torch.randn(3, 5, 5, 8).double()
+    G, _, _, S_F = head.generator(h, e)
+    assert torch.allclose(G, -G.transpose(-1, -2), atol=1e-12)
+    assert (S_F == 0).all()
+    P = torch.linalg.matrix_exp(0.1 * G)
+    Z = torch.randn(3, 30).double()
+    assert torch.allclose((P @ Z[..., None]).squeeze(-1).norm(dim=-1), Z.norm(dim=-1), atol=1e-9)

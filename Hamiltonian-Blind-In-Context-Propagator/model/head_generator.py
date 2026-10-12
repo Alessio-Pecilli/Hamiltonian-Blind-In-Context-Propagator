@@ -20,9 +20,9 @@ def symmetrize_edge_channels(x: torch.Tensor) -> torch.Tensor:
 
 
 class GeneratorHead(nn.Module):
-    def __init__(self, d: int, de: int, m: int, K: int, basis_std: float = 0.02):
+    def __init__(self, d: int, de: int, m: int, K: int, basis_std: float = 0.02, use_S: bool = True):
         super().__init__()
-        self.m, self.K = m, K
+        self.m, self.K, self.use_S = m, K, use_S
         self.w_theta = nn.Linear(d, K)
         self.w_z = nn.Linear(d, m)
         self.A_basis = nn.Parameter(torch.randn(K, m, m) * basis_std)
@@ -49,10 +49,13 @@ class GeneratorHead(nn.Module):
         A_off = gate[..., None, None] * self.w_A(e).view(N, n, n, m, m)       # (N, n, n, m, m)
         A_blocks = torch.where(eye[None, :, :, None, None], A_diag[:, None, None], A_off)
         A = A_blocks.permute(0, 1, 3, 2, 4).reshape(N, n * m, n * m)
+        G = A - A.transpose(-1, -2)
+        if not self.use_S:  # closed-system ablation: G is skew-symmetric, ||exp(k dt G)||_2 = 1
+            return G, theta, gate, h.new_zeros(N)
         S_b = torch.einsum("nk,kab->nab", theta, self.S_basis)                # (N, m, m)
         SS_b = S_b @ S_b.transpose(-1, -2)
         SS = torch.einsum("ij,nab->niajb", eye.to(h.dtype), SS_b).reshape(N, n * m, n * m)
-        G = (A - A.transpose(-1, -2)) - SS
+        G = G - SS
         S_F = S_b.flatten(1).norm(dim=-1) * n ** 0.5                          # ||blockdiag||_F
         return G, theta, gate, S_F
 
