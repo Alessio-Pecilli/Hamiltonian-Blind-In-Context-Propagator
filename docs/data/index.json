@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261015-193504_n8-pair-path-no-s-1-5k-step.json",
+  "latest": "runs/20261015-221826_n8-pair-path-no-s-2k-step.json",
   "exports": [
+    {
+      "file": "runs/20261015-221826_n8-pair-path-no-s-2k-step.json",
+      "label": "n8 pair-path, no S, 2k step",
+      "generated_at": "2026-10-15T22:18:26",
+      "git_commit": "4cb68f9a096dca30ea7928cc003d6b644d274e3c",
+      "notes": "use_S=false, pair_attn+triangle+pair_latent, 2000 step su CPU. Loss piatta ~1.05, probe R2 negativo; k=1 ~ persistence, a orizzonte 64 peggio di persistence; DMD molto meglio."
+    },
     {
       "file": "runs/20261015-193504_n8-pair-path-no-s-1-5k-step.json",
       "label": "n8 pair-path, no S, 1.5k step",
