@@ -524,11 +524,17 @@ function renderRel() {
 }
 
 /* ---------------------------------------------------------------- 04 fisica e modello */
+function archFlags(m) {
+  const v = $("traceArch").value;
+  if (v === "new") return { pair_attn: true, triangle: true, pair_latent: 8 };
+  if (v === "old") return { pair_attn: false, triangle: false, pair_latent: 0 };
+  return { pair_attn: !!m.pair_attn, triangle: !!m.triangle, pair_latent: m.pair_latent || 0 };
+}
 function dims() {
   const r = curRun(), s = D.sample;
   const m = (r && r.config.model) || { d: 128, de: 32, nh: 4, L: 3, m: 32, K: 32 }, t = (r && r.config.train) || { n: 8, H: 16 };
   return { n: s ? s.n : t.n, d: m.d, de: m.de, nh: m.nh, L: m.L, m: m.m, K: m.K, T: s ? s.T : 32, H: s ? s.H : t.H,
-    pair_attn: !!m.pair_attn, triangle: !!m.triangle, pair_latent: m.pair_latent || 0 };
+    ...archFlags(m) };
 }
 function renderModelInfo() {
   const dm = dims();
@@ -723,7 +729,7 @@ segClick("Tseg", (v) => { evalT = +v; renderEval(); scheduleTypeset(); });
 segClick("NEseg", (v) => { evalNE = v; renderEval(); scheduleTypeset(); });
 segClick("kindSeg", (v) => { kind = v; renderSampleControls(); renderSample(); });
 segClick("traceKind", (v) => { traceKind = v; renderTrace(); });
-["traceI", "traceJ"].forEach((id) => $(id).addEventListener("change", renderTrace));
+["traceI", "traceJ", "traceArch"].forEach((id) => $(id).addEventListener("change", renderTrace));
 ["siteI", "siteJ", "chanSel", "xUnit"].forEach((id) => $(id).addEventListener("change", renderSample));
 ["stripMethod", "stripChan"].forEach((id) => $(id).addEventListener("change", renderStrips));
 $("runSel").addEventListener("change", () => { renderOverview(); renderGraph(); renderModelInfo(); renderTrace(); renderTraining(); renderDetails(); scheduleTypeset(); checkTerms(); });
