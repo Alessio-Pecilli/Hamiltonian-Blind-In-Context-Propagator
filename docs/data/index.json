@@ -1,4 +1,12 @@
 {
-  "latest": null,
-  "exports": []
+  "latest": "runs/20261015-193504_n8-pair-path-no-s-1-5k-step.json",
+  "exports": [
+    {
+      "file": "runs/20261015-193504_n8-pair-path-no-s-1-5k-step.json",
+      "label": "n8 pair-path, no S, 1.5k step",
+      "generated_at": "2026-10-15T19:35:04",
+      "git_commit": "439d208c723ea07431297286fde165a861e668a0",
+      "notes": "use_S=false, pair_attn+triangle+pair_latent, 1500 step su CPU (run preliminare)"
+    }
+  ]
 }
