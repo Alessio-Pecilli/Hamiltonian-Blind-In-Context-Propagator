@@ -34,7 +34,7 @@ const EQS = [
     where: [["tmha", "\\mathrm{CausalMHA}", "attenzione causale sui propri passi passati"], ["conv", "\\mathrm{CausalDWConv}", "filtro causale depthwise, kernel 4"], ["light", "\\text{campo recettivo}", "quanti passi/siti influenzano un token"], ["Lbl", "L", "numero di blocchi"]] },
   { tag: "opz.", title: "Estensioni per le coppie (pair_attn, triangle, pair_latent)",
     tex: R`e_{ij}\leftarrow e_{ij}+\mathrm{Tri}\Big(\tfrac1n\sum_k a_{ik}\odot a_{jk}\Big),\qquad e_{ij,t}\leftarrow e_{ij,t}+\mathrm{CausalMHA}_t(e_{ij,0:T}),\qquad u_{ij}(k)=e^{k\Delta t\,C_{ij}}u_{ij}(0)`,
-    note: "Tre modifiche opzionali (flag nel config, attive di default) che danno alle coppie ciò che i nodi avevano già: memoria temporale su tutta la finestra, contesto dei terzi siti e uno stato proprio da propagare.",
+    note: "Tre modifiche opzionali (flag nel config, spente di default dopo il feedback del professore) che danno alle coppie ciò che i nodi avevano già: memoria temporale su tutta la finestra, contesto dei terzi siti e uno stato proprio da propagare.",
     where: [["pairattn", "\\mathrm{CausalMHA}_t", "attenzione temporale causale sulle coppie"], ["triangle", "\\sum_k a_{ik}\\odot a_{jk}", "aggiornamento triangolare sui terzi siti"], ["pairlat", "u_{ij},\\ C_{ij}", "latente di coppia e suo generatore antisimmetrico"]] },
   { tag: "(17)(18)", title: "Coefficienti globali e latenti per sito",
     tex: R`\theta_t=W_\theta\,\frac1n\sum_{i=1}^n h^{(L)}_{i,t}\in\mathbb R^K,\qquad z_{i,t}=W_z\,h^{(L)}_{i,t}\in\mathbb R^m,\quad Z_t=[z_1;\dots;z_n]`,
@@ -45,6 +45,14 @@ const EQS = [
     note: "Con model.use_S = false il termine −SSᵀ è assente: G è antisimmetrica e la propagazione conserva esattamente la norma del latente. Le coppie entrano nella dinamica solo attraverso i blocchi A_ij.",
     where: [["Ak", "A_k,S_k", "basi apprese, combinate da θ"], ["WA", "A_{ij}", "blocco di accoppiamento tra i siti i e j"], ["gate", "g_{ij}", "gate: stima dell'arco"], ["ebar", "\\bar e_{ij}", "feature di coppia all'anchor"],
       ["G", "G_t", "generatore, nm × nm"], ["rot", "A-A^\\top,\\ SS^\\top", "rotazione e contrazione"], ["SF", "\\|S\\|_F", "gauge di dissipazione"]] },
+  { tag: "opz.", title: "Generatore di Pauli (pauli_A)",
+    tex: R`A_{ij}=\sum_{s}c_s(h_i,h_j,e_{ij})\,P_s,\quad P_s\in\{\sigma^{a_1}\!\otimes\cdots\otimes\sigma^{a_q}\},\ \mathrm{wt}\le w,\quad m=2^q,\qquad G=A-A^\top`,
+    note: "Un solo MLP produce tutti i blocchi, diagonali e no, come somma di una base di Pauli fissa nel latente (non appresa). Nessun θ, nessun gate; il punteggio d'arco è ‖A_ij‖_F normalizzato. G resta antisimmetrica.",
+    where: [["pauliA", "P_s,\\ c_s", "base di Pauli fissa e coefficienti predetti"], ["ebar", "e_{ij}", "feature di coppia (zero sulla diagonale)"], ["G", "G", "generatore, nm × nm"], ["gate", "\\|A_{ij}\\|_F", "punteggio d'arco"]] },
+  { tag: "—", title: "Lettura a posteriori dal generatore",
+    tex: R`\mathrm{AUROC}\big(\|G_{ij}\|_F,\mathrm{adj}\big),\qquad \mathrm{corr}\big(\|G_{ij}\|_F,J_{ij}\big)_\text{archi},\qquad \mathrm{corr}\big(\|G_{ii}\|_F,h_i\big)`,
+    note: "Sostituisce il probe. h, J e adiacenza veri entrano solo qui, dopo il training, come misura: mai come bersaglio o gradiente. L'obiettivo resta prevedere bene gli stati: G e z possono essere lontani dalle descrizioni vere.",
+    where: [["gen_auroc_adj", "\\mathrm{AUROC}", "separazione archi / non archi"], ["gen_corr_J", "\\mathrm{corr}_J", "intensità contro J"], ["gen_corr_h", "\\mathrm{corr}_h", "blocco diagonale contro h"]] },
   { tag: "(21)", title: "Propagazione nel latente",
     tex: R`P_t=\exp(\Delta t\,G_t),\qquad Z_{t+k}=P_t^{\,k}Z_t,\quad k=1,\dots,H`,
     note: "Calcolata con prodotti ripetuti matrice-vettore; con G antisimmetrica ‖P‖₂ = 1.",
@@ -53,9 +61,9 @@ const EQS = [
     tex: R`\hat N_{t+k}[i,:]=\tanh\big(D_n z_{i,t+k}\big),\qquad \hat E_{t+k}[i,j,c]=\tanh\big(z_{i,t+k}^\top B_c\,z_{j,t+k}+\beta_c\big)`,
     note: "Nodi: lineari nel latente. Coppie: bilineari nei latenti dei due siti, simmetrizzati. La feature di coppia non entra direttamente nel decoder.",
     where: [["decN", "D_n", "mappa m → 3"], ["decE", "B_c,\\beta_c", "forma bilineare e bias del canale c (9 canali)"], ["tanh", "\\tanh", "tiene l'uscita in (−1, 1)"], ["z", "z_{i,t+k}", "latente propagato"]] },
-  { tag: "(26)", title: "Probe (solo diagnostica)",
+  { tag: "(26)", title: "Probe (solo diagnostica, spento nelle run nuove)",
     tex: R`\hat h_i=w_h^\top h^{(L)}_{i,T},\qquad \hat J_{ij}=w_J^\top\bar e_{ij},\qquad \hat a_{ij}=\sigma(w_a^\top\bar e_{ij})`,
-    note: "Lettori lineari con stop-gradient: non modificano il corpo, misurano cosa c'è già nelle feature.",
+    note: "Lettori lineari con stop-gradient: non modificano il corpo, misurano cosa c'è già nelle feature. Nelle run nuove (model.probe = false, λ_probe = 0) non esistono: h e J veri non sono mai usati come bersaglio.",
     where: [["probe_h", "\\hat h_i", "stima del campo"], ["probe_J", "\\hat J_{ij}", "stima dell'accoppiamento"], ["probe_a", "\\hat a_{ij}", "stima dell'arco"], ["ebar", "\\bar e_{ij}", "feature di coppia"]] },
   { tag: "(28)", title: "Matrice densità ricostruita",
     tex: R`\hat\rho_{ij}=\tfrac14\sum_{a,b\in\{0,x,y,z\}}c_{ab}\,\sigma^a\otimes\sigma^b,\quad c_{00}=1,\ c_{a0}=\hat N[i,a],\ c_{0b}=\hat N[j,b],\ c_{ab}=\hat E[i,j,a,b]`,
@@ -92,7 +100,7 @@ const LOSS_CARDS = [
       "Tre lettori lineari producono ĥ_i, Ĵ_ij e il logit di adiacenza.",
       "MSE su h (n valori per traiettoria), MSE su J su tutte le coppie i≠j (archi con J ∈ [0.5, 1.5], non-archi con J = 0), BCE sull'adiacenza.",
       "Si sommano. Poiché le feature sono staccate, il gradiente arriva solo ai tre lettori, mai al corpo né alla head."],
-    code: "losses.probe_loss, model/probe.py", typical: "≈ 1 e quasi costante: non è un segnale di fallimento del training" },
+    code: "losses.probe_loss, model/probe.py", typical: "≈ 1 e quasi costante nelle run vecchie; disattivato (λ = 0, nessun modulo probe) nelle run nuove" },
   { id: "Ltheta", grad: true,
     tex: R`\|\theta\|^2=\operatorname{mean}_{b,t}\sum_{k=1}^K\theta_{t,k}^2`,
     steps: ["Per ogni anchor la head produce il vettore θ_t di K coefficienti (Eq. 17).",
@@ -158,8 +166,12 @@ function traceStages(dims, sel, pg) {
     { n: 7, t: "Head A · cosa legge dal corpo", role: "both",
       rows: node
         ? [["Latente", `\\(z_${i}=W_z h_${i}\\in\\mathbb R^{${m}}\\): è lo stato iniziale del sito nella propagazione.`],
-           ["Coefficienti", `\\(\\theta=W_\\theta\\tfrac1n\\sum_i h_i\\in\\mathbb R^{${K}}\\): il sito ${i} contribuisce per 1/${n} a una descrizione globale; θ fissa il blocco diagonale \\(A_{ii}\\) uguale per tutti i siti.`],
-           ["Capacità", `W<sub>z</sub>, W<sub>θ</sub>, basi, decoder${P("head_node_and_generator")}`]]
+           dims.pauli_A ? ["Coefficienti", `Nessun θ: il sito ${i} entra, con gli altri, nell'unico MLP che produce i coefficienti di Pauli di ogni blocco \\(A_{${i}j}\\) e di \\(A_{${i}${i}}\\) (ingresso \\([h_${i},h_j,e_{${i}j}]\\)).`]
+             : ["Coefficienti", `\\(\\theta=W_\\theta\\tfrac1n\\sum_i h_i\\in\\mathbb R^{${K}}\\): il sito ${i} contribuisce per 1/${n} a una descrizione globale; θ fissa il blocco diagonale \\(A_{ii}\\) uguale per tutti i siti.`],
+           ["Capacità", `W<sub>z</sub>, ${dims.pauli_A ? "MLP dei coefficienti" : "W<sub>θ</sub>, basi"}, decoder${P("head_node_and_generator")}`]]
+        : dims.pauli_A ? [["Coefficienti", `\\(c=\\mathrm{MLP}([h_${i},h_${j},\\bar e_{${i}${j}}])\\): coefficienti su una base fissa di stringhe di Pauli (peso ≤ w) dello spazio latente di dimensione ${m}.`],
+           ["Accoppiamento", `\\(A_{${i}${j}}=\\sum_s c_sP_s\\), base fissa non appresa. Nessun gate: il punteggio d'arco è \\(\\|A_{${i}${j}}\\|_F\\) normalizzato. <b>La feature di coppia entra nella dinamica solo da qui.</b>`],
+           ["Capacità", `MLP dei coefficienti${P("head_pair")}`]]
         : [["Gate", `\\(g_{${i}${j}}=\\sigma(w_g^\\top\\bar e_{${i}${j}})\\in(0,1)\\): la stima dell'arco.`],
            ["Accoppiamento", `\\(A_{${i}${j}}=g_{${i}${j}}\\,\\mathrm{reshape}_{${m}\\times${m}}(W_A\\bar e_{${i}${j}})\\): blocco di G che lega i latenti dei siti ${i} e ${j}. <b>È l'unico punto in cui la feature di coppia entra nella dinamica.</b>`],
            ...(pl ? [["Latente di coppia", `\\(u_{${i}${j}}(0)=W_u\\bar e_{${i}${j}}\\in\\mathbb R^{${pl}}\\), ruotato da \\(C_{${i}${j}}=B-B^\\top\\) letto da \\(\\bar e_{${i}${j}}\\): \\(u(k)=\\exp(k\\Delta t\\,C)u(0)\\). Qui la feature di coppia entra <b>anche</b> nella previsione.`]] : []),
@@ -180,8 +192,8 @@ function traceStages(dims, sel, pg) {
       cross: [] },
     { n: 10, t: "Probe e loss", role: "both",
       rows: node
-        ? [["Probe", `\\(\\hat h_${i}=w_h^\\top h_${i}\\): lettura lineare del campo. Stop-gradient.`], ["Loss", `Errore su \\(\\hat N[${i},:]\\) in \\(\\mathcal L_\\text{pred}\\); il gradiente arriva a \\(h_${i}\\) attraverso \\(z_${i}\\) e θ.`]]
-        : [["Probe", `\\(\\hat J_{${i}${j}}=w_J^\\top\\bar e_{${i}${j}}\\), \\(\\hat a_{${i}${j}}\\): lettura lineare di J e dell'arco. Stop-gradient.`],
+        ? [dims.probe ? ["Probe", `\\(\\hat h_${i}=w_h^\\top h_${i}\\): lettura lineare del campo. Stop-gradient.`] : ["Probe", "assente in questa run: h vero non è mai bersaglio. A posteriori si confronta ‖G<sub>ii</sub>‖ con h<sub>i</sub>."], ["Loss", `Errore su \\(\\hat N[${i},:]\\) in \\(\\mathcal L_\\text{pred}\\); il gradiente arriva a \\(h_${i}\\) attraverso \\(z_${i}\\) e θ.`]]
+        : [dims.probe ? ["Probe", `\\(\\hat J_{${i}${j}}=w_J^\\top\\bar e_{${i}${j}}\\), \\(\\hat a_{${i}${j}}\\): lettura lineare di J e dell'arco. Stop-gradient.`] : ["Probe", "assente in questa run: J vero non è mai bersaglio. A posteriori si confronta ‖G<sub>ij</sub>‖ con J<sub>ij</sub> e con l'adiacenza."],
            ["Loss", `Errore su \\(\\hat E[${i},${j},:]\\) in \\(\\mathcal L_\\text{pred}\\); il gradiente arriva a \\(\\bar e_{${i}${j}}\\) <b>solo</b> attraverso il gate e \\(A_{${i}${j}}\\), e a \\(h_${i}\\), \\(h_${j}\\) attraverso i latenti.`]],
       cross: [] },
   ];

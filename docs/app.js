@@ -278,6 +278,11 @@ function renderChecks(ms, mk_, T, r) {
     const Tl = Tm[Tm.length - 1], res = ms[mk_][Tl]; const a = res.auroc_gate;
     add(`Grafo recuperato: ${tm("auroc", "AUROC")} del ${tm("gate", "gate")} > 0.9`, a == null ? pill("na", "n/d") : a > 0.9 ? pill("good", fmt(a)) : a > 0.7 ? pill("warn", fmt(a)) : pill("bad", fmt(a)),
       `AUROC di g<sub>ij</sub> contro l'adiacenza vera a T = ${Tl}; attenzione spaziale ${tm("alpha", "ᾱ")}: ${fmt(res.auroc_attn)}.`);
+    if (res.gen_auroc_adj != null) {
+      const ga = res.gen_auroc_adj;
+      add(`Lettura a posteriori da G: ${tm("gen_auroc_adj", "AUROC")} di ‖G<sub>ij</sub>‖ contro l'adiacenza`, ga > 0.9 ? pill("good", fmt(ga)) : ga > 0.7 ? pill("warn", fmt(ga)) : pill("bad", fmt(ga)),
+        `A T = ${Tl}: ${tm("gen_corr_J", "corr")} con J sugli archi = ${fmt(res.gen_corr_J)}, ${tm("gen_corr_h", "corr")} di ‖G<sub>ii</sub>‖ con h = ${fmt(res.gen_corr_h)}. Informativo, non un criterio di successo: l'obiettivo è prevedere bene gli stati (fidelity e osservabili), G può essere lontano dall'Hamiltoniana vera.`);
+    }
     if (res.probe_r2_h != null && res.probe_r2_J != null) {
       const gap = res.probe_r2_h - res.probe_r2_J;
       add(`Informazione locale e globale: ${tm("r2", "R²")} di ${tm("probe_h", "ĥ")} vs ${tm("probe_J", "Ĵ")}`, gap > 0.3 ? pill("warn", `Δ = ${fmt(gap, 2)}`) : pill("good", `Δ = ${fmt(gap, 2)}`),
@@ -348,9 +353,9 @@ function renderEval() {
 }
 function renderDiag(ms, keys, T) {
   const mods = keys.filter(isModel);
-  $("diagTable").innerHTML = mods.length ? `<tr><th>modello</th><th>${tm("T", "T")}</th><th>${tm("auroc", "AUROC")} ${tm("gate", "gate")}</th><th>AUROC ${tm("alpha", "attenzione")}</th><th>AUROC ${tm("probe_a", "probe â")}</th><th>${tm("r2", "R²")} ${tm("probe_J", "Ĵ")} (archi)</th><th>R² ${tm("probe_h", "ĥ")}</th><th>${tm("SF", "‖S‖<sub>F</sub>")}</th><th>${tm("ntraj", "traiettorie")}</th></tr>` +
+  $("diagTable").innerHTML = mods.length ? `<tr><th>modello</th><th>${tm("T", "T")}</th><th>${tm("auroc", "AUROC")} ${tm("gate", "gate")}</th><th>AUROC ${tm("alpha", "attenzione")}</th><th>AUROC ${tm("probe_a", "probe â")}</th><th>${tm("r2", "R²")} ${tm("probe_J", "Ĵ")} (archi)</th><th>R² ${tm("probe_h", "ĥ")}</th><th>${tm("SF", "‖S‖<sub>F</sub>")}</th><th>${tm("gen_auroc_adj", "AUROC")} G</th><th>${tm("gen_corr_J", "corr")} ‖G<sub>ij</sub>‖, J</th><th>${tm("gen_corr_h", "corr")} ‖G<sub>ii</sub>‖, h</th><th>${tm("ntraj", "traiettorie")}</th></tr>` +
     mods.flatMap((k) => T.filter((t) => ms[k][t]).map((t) => { const r = ms[k][t];
-      return `<tr><td>${mTerm(k)}</td><td class="mono">${t}</td><td class="mono">${fmt(r.auroc_gate)}</td><td class="mono">${fmt(r.auroc_attn)}</td><td class="mono">${fmt(r.probe_auroc_adj)}</td><td class="mono">${fmt(r.probe_r2_J)}</td><td class="mono">${fmt(r.probe_r2_h)}</td><td class="mono">${fmt(r.S_F)}</td><td class="mono">${r.ntraj}</td></tr>`; })).join("")
+      return `<tr><td>${mTerm(k)}</td><td class="mono">${t}</td><td class="mono">${fmt(r.auroc_gate)}</td><td class="mono">${fmt(r.auroc_attn)}</td><td class="mono">${fmt(r.probe_auroc_adj)}</td><td class="mono">${fmt(r.probe_r2_J)}</td><td class="mono">${fmt(r.probe_r2_h)}</td><td class="mono">${fmt(r.S_F)}</td><td class="mono">${fmt(r.gen_auroc_adj)}</td><td class="mono">${fmt(r.gen_corr_J)}</td><td class="mono">${fmt(r.gen_corr_h)}</td><td class="mono">${r.ntraj}</td></tr>`; })).join("")
     : `<tr><td class="muted">Nessun risultato del modello in questo set.</td></tr>`;
 }
 
@@ -459,6 +464,7 @@ function renderGraph() {
     s.gate && { t: `Gate del modello ${tm("gate", "g<sub>ij</sub>")}`, m: s.gate, max: 1, au: true },
     s.attn && { t: `Attenzione spaziale ${tm("alpha", "ᾱ<sub>ij</sub>")}`, m: s.attn, max: Math.max(...pairs.map(([i, j]) => s.attn[i][j])), au: true },
     s.probe && { t: `Probe ${tm("probe_a", "â<sub>ij</sub>")} = σ(·)`, m: s.probe.adj, max: 1, au: true },
+    s.G_norm && { t: `Generatore ${tm("gen_auroc_adj", "‖G<sub>ij</sub>‖<sub>F</sub>")}`, m: s.G_norm, max: Math.max(...pairs.map(([i, j]) => s.G_norm[i][j])), au: true },
   ].filter(Boolean);
   const c0 = hex2rgb(css("--heat-0")), c1 = hex2rgb(css("--heat-1"));
   $("heats").innerHTML = mats.map((M, mi) => {
@@ -488,7 +494,18 @@ function renderGraph() {
       { label: "coppie senza arco", data: off, backgroundColor: css("--ink-3"), borderColor: css("--surface"), borderWidth: 1.5, pointRadius: 4 } ] },
       options: { plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 10, filter: (it) => it.text !== "y = x" } }, tooltip: { filter: (it) => it.dataset.label !== "y = x", callbacks: { label: (it) => ` ${it.dataset.label}: J = ${it.parsed.x.toFixed(3)}, Ĵ = ${it.parsed.y.toFixed(3)}`, footer: footerFor("probe_J") } } },
         scales: { x: axis("J vero", { min: lo, max: hi }), y: axis("Ĵ probe", { min: lo, max: hi }) } } });
-  } else setEmpty("cProbeJ", "Probe non presente in questo export");
+  } else if (s.G_norm) {
+    $("gJTitle").innerHTML = `Generatore: ${tm("gen_corr_J", "‖G<sub>ij</sub>‖")} contro ${tm("Jij", "J<sub>ij</sub>")}`;
+    $("gJAxes").innerHTML = `x: ${tm("Jij", "J vero")} · y: ${tm("gen_corr_J", "‖G<sub>ij</sub>‖<sub>F</sub>")} (norma del blocco di G)`;
+    $("gJHow").innerHTML = "<b>Come leggerlo.</b> Lettura a posteriori: J non è mai dato al modello. Una relazione crescente sugli archi veri indica che l'intensità del generatore segue l'accoppiamento; una nuvola piatta indica che G descrive la dinamica in modo diverso da J, il che non è un errore se le previsioni sono accurate.";
+    const pt = (f) => pairs.filter(([i, j]) => f(i, j)).map(([i, j]) => ({ x: s.J[i][j], y: s.G_norm[i][j] }));
+    const on = pt((i, j) => s.adj[i][j]), off = pt((i, j) => !s.adj[i][j]);
+    mk("cProbeJ", { type: "scatter", data: { datasets: [
+      { label: "archi veri", data: on, backgroundColor: css("--s1"), borderColor: css("--surface"), borderWidth: 1.5, pointRadius: 5 },
+      { label: "coppie senza arco", data: off, backgroundColor: css("--ink-3"), borderColor: css("--surface"), borderWidth: 1.5, pointRadius: 4 } ] },
+      options: { plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: (it) => ` ${it.dataset.label}: J = ${it.parsed.x.toFixed(3)}, ‖G‖ = ${it.parsed.y.toFixed(3)}`, footer: footerFor("gen_corr_J") } } },
+        scales: { x: axis("J vero"), y: axis("‖G_ij‖_F", { beginAtZero: true }) } } });
+  } else setEmpty("cProbeJ", "Né probe né generatore in questo export");
   if (s.G_eig) {
     const pts = s.G_eig.re.map((r, q) => ({ x: r, y: s.G_eig.im[q] }));
     $("eigCap").innerHTML = `${pts.length} autovalori (nm) · max Re λ = ${fmt(s.G_eig.max_re)} · ${tm("SF", "‖S‖<sub>F</sub>")} = ${fmt(s.G_eig.S_F)}`;
@@ -514,6 +531,7 @@ function targetVariances() {
 function renderRel() {
   const r = curRun();
   if (!r || !r.train.length) { setEmpty("cRel", "Nessun log di training nei dati caricati"); $("lgRel").innerHTML = ""; return; }
+  if (!r.train.some((d) => d.probe_h != null)) { setEmpty("cRel", "Probe disattivato in questa run (nessun bersaglio h, J): vedi la lettura a posteriori da G"); $("lgRel").innerHTML = ""; return; }
   const v = targetVariances(), a = +$("smoothSel").value, x = r.train.map((d) => d.step);
   const line = (key, scale, color, label) => ({ label, data: ema(r.train.map((d) => (d[key] == null ? null : d[key] / scale)), a).map((y, i) => ({ x: x[i], y })), borderColor: color, backgroundColor: color });
   legend("lgRel", [{ label: "campi ĥ (locale)", color: css("--s1"), term: "probe_h" }, { label: "accoppiamenti Ĵ (globale)", color: css("--s2"), term: "probe_J" }, { label: "predittore costante = 1", color: css("--ink-3"), dash: true }]);
@@ -525,10 +543,10 @@ function renderRel() {
 
 /* ---------------------------------------------------------------- 04 fisica e modello */
 function archFlags(m) {
-  const v = $("traceArch").value;
-  if (v === "new") return { pair_attn: true, triangle: true, pair_latent: 8 };
-  if (v === "old") return { pair_attn: false, triangle: false, pair_latent: 0 };
-  return { pair_attn: !!m.pair_attn, triangle: !!m.triangle, pair_latent: m.pair_latent || 0 };
+  const v = $("traceArch").value, base = { pauli_A: !!m.pauli_A, probe: m.probe !== false };  // probe absent in old configs = on
+  if (v === "new") return { ...base, pair_attn: true, triangle: true, pair_latent: 8 };
+  if (v === "old") return { ...base, pair_attn: false, triangle: false, pair_latent: 0 };
+  return { ...base, pair_attn: !!m.pair_attn, triangle: !!m.triangle, pair_latent: m.pair_latent || 0 };
 }
 function dims() {
   const r = curRun(), s = D.sample;
@@ -558,7 +576,7 @@ function renderContrib() {
   const r = curRun();
   if (!r || !r.train.length) { $("contribTable").innerHTML = `<tr><td class="muted">Nessun log di training.</td></tr>`; $("contribNote").textContent = ""; return; }
   const l = r.config.loss, last = r.train[r.train.length - 1];
-  const terms = [["Lpred", "L_pred", last.pred, 1, true], ["Lphys", "L_phys", last.phys, l.lambda_phys, true], ["Lprobe", "L_probe", last.probe, l.lambda_probe, false], ["Ltheta", "‖θ‖²", last.theta, l.lambda_theta, true]];
+  const terms = [["Lpred", "L_pred", last.pred, 1, true], ["Lphys", "L_phys", last.phys, l.lambda_phys, true], ["Lprobe", l.lambda_probe ? "L_probe" : "L_probe (disattivato)", last.probe || 0, l.lambda_probe, false], ["Ltheta", "‖θ‖²", last.theta, l.lambda_theta, true]];
   const tot = terms.reduce((a, t) => a + (t[2] || 0) * t[3], 0);
   $("contribNote").textContent = `step ${last.step.toLocaleString("it-IT")} · loss totale registrata ${fmt(last.loss, 4)}`;
   $("contribTable").innerHTML = `<tr><th>termine</th><th>valore</th><th>peso ${tm("lam", "λ")}</th><th>contributo</th><th>% della loss</th><th>gradiente al corpo</th></tr>` +
@@ -647,21 +665,40 @@ function renderTraining() {
   legend("lgContrib", [{ label: "L_pred", color: css("--s2"), term: "Lpred" }, { label: "λ_phys·L_phys", color: css("--s3"), term: "Lphys" }, { label: "λ_probe·L_probe", color: css("--s5"), term: "Lprobe" }, { label: "λ_θ·‖θ‖²", color: css("--s7"), term: "Ltheta" }]);
   mk("cContrib", { type: "line", data: { datasets: [line("pred", css("--s2"), "L_pred"), line("phys", css("--s3"), "λ_phys·L_phys", true, lc.lambda_phys), line("probe", css("--s5"), "λ_probe·L_probe", true, lc.lambda_probe), line("theta", css("--s7"), "λ_θ·‖θ‖²", true, lc.lambda_theta)] }, options: opts(true, null, "lam") });
   legend("lgProbe", [{ label: "MSE h", color: css("--s1"), term: "probe_h" }, { label: "MSE J", color: css("--s2"), term: "probe_J" }, { label: "BCE adiacenza", color: css("--s3"), term: "probe_a" }]);
-  mk("cProbe", { type: "line", data: { datasets: [line("probe_h", css("--s1"), "MSE h"), line("probe_J", css("--s2"), "MSE J"), line("probe_adj", css("--s3"), "BCE adiacenza")] }, options: opts(true, null, "probe") });
+  const hasProbe = tr.some((d) => d.probe_h != null);
+  if (!hasProbe) { $("lgProbe").innerHTML = ""; setEmpty("cProbe", "Probe disattivato in questa run (λ_probe = 0, model.probe = false)"); }
+  else mk("cProbe", { type: "line", data: { datasets: [line("probe_h", css("--s1"), "MSE h"), line("probe_J", css("--s2"), "MSE J"), line("probe_adj", css("--s3"), "BCE adiacenza")] }, options: opts(true, null, "probe") });
   mk("cPhys", { type: "line", data: { datasets: [line("phys", css("--s1"), "L_phys")] }, options: opts(false, null, "Lphys") });
   mk("cSF", { type: "line", data: { datasets: [line("S_F", css("--s1"), "‖S‖_F")] }, options: opts(false, null, "SF") });
   $("sfCap").textContent = useS(r) ? "gauge di dissipazione, atteso → 0 su sistema chiuso" : "dissipazione disattivata (use_S = false): vale 0 per costruzione";
   mk("cLr", { type: "line", data: { datasets: [line("lr", css("--s1"), "lr", false)] }, options: opts(false, null, "lr") });
   mk("cGn", { type: "line", data: { datasets: [line("grad_norm", css("--s1"), "‖∇‖")] }, options: opts(true, null, "gradnorm") });
   $("evalEvery").textContent = r.config.train.eval_every;
+  renderConvergence(r);
   const rowsV = [];
   (r.val || []).forEach((v) => {
     const Tset = [...new Set(Object.keys(v).filter((k) => /^T\d+\//.test(k)).map((k) => +k.slice(1, k.indexOf("/"))))].sort((p, q) => p - q);
-    Tset.forEach((T) => { const g = (k) => v[`T${T}/${k}`]; rowsV.push([v.step, T, g("rmse_n_k1"), g("rmse_n_kH"), g("rmse_e_kH"), g("k_star"), g("auroc_gate"), g("auroc_attn"), g("probe_r2_J"), g("probe_r2_h"), g("S_F")]); });
+    Tset.forEach((T) => { const g = (k) => v[`T${T}/${k}`]; rowsV.push([v.step, T, g("rmse_n_k1"), g("rmse_n_kH"), g("rmse_e_kH"), g("k_star"), g("auroc_gate"), g("auroc_attn"), g("probe_r2_J"), g("probe_r2_h"), g("S_F"), g("fid_mean16"), g("gen_auroc_adj"), g("gen_corr_J"), g("gen_corr_h")]); });
   });
-  $("valTable").innerHTML = rowsV.length ? `<tr><th>${tm("step", "step")}</th><th>${tm("T", "T")}</th><th>${tm("rmse_n", "RMSE<sub>n</sub>(1)")}</th><th>${tm("rmse_n", "RMSE<sub>n</sub>(H)")}</th><th>${tm("rmse_e", "RMSE<sub>e</sub>(H)")}</th><th>${tm("kstar", "k*")}</th><th>${tm("auroc", "AUROC")} ${tm("gate", "gate")}</th><th>AUROC ${tm("alpha", "attn")}</th><th>${tm("r2", "R²")} ${tm("probe_J", "Ĵ")}</th><th>R² ${tm("probe_h", "ĥ")}</th><th>${tm("SF", "‖S‖<sub>F</sub>")}</th></tr>` +
+  $("valTable").innerHTML = rowsV.length ? `<tr><th>${tm("step", "step")}</th><th>${tm("T", "T")}</th><th>${tm("rmse_n", "RMSE<sub>n</sub>(1)")}</th><th>${tm("rmse_n", "RMSE<sub>n</sub>(H)")}</th><th>${tm("rmse_e", "RMSE<sub>e</sub>(H)")}</th><th>${tm("kstar", "k*")}</th><th>${tm("auroc", "AUROC")} ${tm("gate", "gate")}</th><th>AUROC ${tm("alpha", "attn")}</th><th>${tm("r2", "R²")} ${tm("probe_J", "Ĵ")}</th><th>R² ${tm("probe_h", "ĥ")}</th><th>${tm("SF", "‖S‖<sub>F</sub>")}</th><th>${tm("fidmean", "F̄₂")}</th><th>${tm("gen_auroc_adj", "AUROC")} G</th><th>${tm("gen_corr_J", "corr J")}</th><th>${tm("gen_corr_h", "corr h")}</th></tr>` +
     rowsV.map((rw) => `<tr>${rw.map((v, i) => `<td class="mono">${i < 2 || i === 5 ? v : fmt(v, i <= 4 ? 4 : 3)}</td>`).join("")}</tr>`).join("") : `<tr><td class="muted">Nessuna validazione registrata (eval_every non raggiunto).</td></tr>`;
   renderContrib();
+}
+
+function renderConvergence(r) {
+  const val = r.val || [];
+  const Ts = [...new Set(val.flatMap((v) => Object.keys(v).filter((k) => /^T\d+\//.test(k)).map((k) => +k.slice(1, k.indexOf("/")))))].sort((p, q) => p - q);
+  const cols = [css("--s1"), css("--s2"), css("--s3"), css("--s5"), css("--s7")];
+  const draw = (id, key, ytitle, extra = {}) => {
+    const ds = Ts.map((T, ti) => ({ label: `T = ${T}`, data: val.filter((v) => v[`T${T}/${key}`] != null).map((v) => ({ x: v.step, y: v[`T${T}/${key}`] })), borderColor: cols[ti % cols.length], backgroundColor: cols[ti % cols.length], pointRadius: 3, borderWidth: 1.6 })).filter((d) => d.data.length);
+    if (!ds.length) { setEmpty(id, key === "fid_mean16" ? "Non registrata in questa run (validazione con le sole metriche vecchie)" : "Nessuna validazione registrata"); return; }
+    mk(id, { type: "line", data: { datasets: ds }, options: { parsing: false, interaction: hoverIdx, scales: { x: axis("step", { type: "linear", min: 0 }), y: axis(ytitle, extra) } } });
+  };
+  legend("lgConvF", Ts.map((T, ti) => ({ label: `T = ${T}`, color: cols[ti % cols.length], term: "T" })));
+  draw("cConvF", "fid_mean16", "F̄₂", { min: 0, max: 1 });
+  draw("cConvR", "rmse_n_k1", "RMSE_n(1)", { type: "logarithmic" });
+  draw("cConvK", "k_star", "k*", { beginAtZero: true });
+  $("convCap").textContent = val.length ? `${val.length} validazioni · ultimo step ${val[val.length - 1].step.toLocaleString("it-IT")}` : "nessuna validazione registrata";
 }
 
 /* ---------------------------------------------------------------- 06 dettagli */

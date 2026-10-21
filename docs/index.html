@@ -168,7 +168,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
 <!-- 03 ------------------------------------------------------------------------------- -->
 <section id="graph">
   <div class="sec-head"><span class="num">03</span><h2>Grafo inferito</h2><span class="spec">spec §3.6, §3.8, §6.3–6.5</span></div>
-  <p class="lede">Il modello non riceve mai il grafo né <span class="term" data-term="Jij" tabindex="0">\(J\)</span>, <span class="term" data-term="hi" tabindex="0">\(h\)</span>. Qui si confronta la verità della traiettoria di esempio con ciò che il modello ne ricava: il <span class="term" data-term="gate" tabindex="0">gate \(g_{ij}\)</span>, l'<span class="term" data-term="alpha" tabindex="0">attenzione spaziale media \(\bar\alpha_{ij}\)</span> e il <span class="term" data-term="probe_J" tabindex="0">probe \(\hat J_{ij}\)</span>.</p>
+  <p class="lede">Il modello non riceve mai il grafo né <span class="term" data-term="Jij" tabindex="0">\(J\)</span>, <span class="term" data-term="hi" tabindex="0">\(h\)</span>. Qui si confronta la verità della traiettoria di esempio con ciò che il modello ne ricava: il <span class="term" data-term="gate" tabindex="0">gate \(g_{ij}\)</span> (o, con <span class="term" data-term="pauliA" tabindex="0">pauli_A</span>, ‖A<sub>ij</sub>‖<sub>F</sub>), l'<span class="term" data-term="alpha" tabindex="0">attenzione spaziale media \(\bar\alpha_{ij}\)</span> e, nelle run vecchie, il <span class="term" data-term="probe_J" tabindex="0">probe \(\hat J_{ij}\)</span>. Nelle run nuove si legge a posteriori il <b>generatore efficace G</b>: la norma dei suoi blocchi, ‖G<sub>ij</sub>‖<sub>F</sub>. L'obiettivo è prevedere bene gli stati, non ritrovare l'Hamiltoniana: G e il latente possono essere lontani da J e h veri.</p>
   <div class="grid g4" id="heats"></div>
   <p class="how"><b>Come leggerle.</b> Ogni matrice ha i siti sulle righe e sulle colonne; più scura = punteggio più alto. Il contorno arancio marca gli archi veri: se il modello ha capito il grafo, le celle scure coincidono con i contorni. L'<span class="term" data-term="auroc" tabindex="0">AUROC</span> sotto ogni matrice riassume quanto bene il punteggio separa archi veri e non archi su questa traiettoria.</p>
   <div class="panel">
@@ -179,9 +179,9 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <p class="how"><b>Come leggerlo.</b> Un valore di 1 significa che il lettore non fa meglio di un predittore costante; vicino a 0 significa che l'informazione è letta bene. Se la curva dei campi <span class="term" data-term="hi" tabindex="0">h</span> (locale, per sito) scende e quella degli accoppiamenti <span class="term" data-term="Jij" tabindex="0">J</span> (globale, per coppia) resta vicina a 1, il modello codifica bene i siti ma non le coppie. Nota: l'errore su J è calcolato su <i>tutte</i> le coppie i≠j, comprese quelle senza arco (J = 0).</p>
   </div>
   <div class="grid g2">
-    <div class="panel"><div class="ph"><h3>Probe: <span class="term" data-term="probe_J" tabindex="0">\(\hat J_{ij}\)</span> contro <span class="term" data-term="Jij" tabindex="0">\(J_{ij}\)</span></h3><span class="cap">tutte le coppie; archi veri evidenziati</span></div><div class="chart"><canvas id="cProbeJ"></canvas></div>
-      <div class="axes">x: <span class="term" data-term="Jij" tabindex="0">J vero</span> · y: <span class="term" data-term="probe_J" tabindex="0">Ĵ probe</span></div>
-      <p class="how"><b>Come leggerlo.</b> Se il modello avesse imparato J, i punti starebbero sulla diagonale tratteggiata. Una nuvola orizzontale significa che Ĵ non dipende da J.</p></div>
+    <div class="panel"><div class="ph"><h3 id="gJTitle">Probe: <span class="term" data-term="probe_J" tabindex="0">\(\hat J_{ij}\)</span> contro <span class="term" data-term="Jij" tabindex="0">\(J_{ij}\)</span></h3><span class="cap" id="gJCap">tutte le coppie; archi veri evidenziati</span></div><div class="chart"><canvas id="cProbeJ"></canvas></div>
+      <div class="axes" id="gJAxes">x: <span class="term" data-term="Jij" tabindex="0">J vero</span> · y: <span class="term" data-term="probe_J" tabindex="0">Ĵ probe</span></div>
+      <p class="how" id="gJHow"><b>Come leggerlo.</b> Se il modello avesse imparato J, i punti starebbero sulla diagonale tratteggiata. Una nuvola orizzontale significa che Ĵ non dipende da J.</p></div>
     <div class="panel"><div class="ph"><h3><span class="term" data-term="spectrum" tabindex="0">Spettro di \(G_t\)</span></h3><span class="cap" id="eigCap"></span></div><div class="chart"><canvas id="cEig"></canvas></div>
       <div class="axes">x: Re λ (<span class="term" data-term="rot" tabindex="0">smorzamento</span>) · y: Im λ (frequenze)</div>
       <p class="how"><b>Come leggerlo.</b> Ogni punto è un autovalore del generatore. Devono stare a sinistra o sulla linea rossa (Re λ ≤ 0): significa che il rollout non esplode. Punti sull'asse verticale = oscillazione pura, tipica di un sistema chiuso. La spaziatura verticale indica le frequenze che il modello ha appreso.</p></div>
@@ -189,7 +189,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
   <div class="panel">
     <div class="ph"><h3>Diagnostica del modello</h3><span class="cap">test set</span></div>
     <div class="tablewrap"><table id="diagTable"></table></div>
-    <p class="how"><b>Come leggerla.</b> <span class="term" data-term="auroc" tabindex="0">AUROC</span> vicino a 1 = grafo recuperato (atteso &gt; 0.9). <span class="term" data-term="r2" tabindex="0">R²</span> vicino a 1 = valori di J e h letti bene; ≤ 0 = non meglio della media. <span class="term" data-term="SF" tabindex="0">‖S‖<sub>F</sub></span> = 0 se la dissipazione è disattivata.</p>
+    <p class="how"><b>Come leggerla.</b> <span class="term" data-term="auroc" tabindex="0">AUROC</span> vicino a 1 = grafo recuperato (atteso &gt; 0.9). <span class="term" data-term="r2" tabindex="0">R²</span> vicino a 1 = valori di J e h letti bene; ≤ 0 = non meglio della media. <span class="term" data-term="SF" tabindex="0">‖S‖<sub>F</sub></span> = 0 se la dissipazione è disattivata. Le tre colonne «G» sono la lettura a posteriori dal generatore (<span class="term" data-term="gen_auroc_adj" tabindex="0">AUROC</span>, <span class="term" data-term="gen_corr_J" tabindex="0">corr con J</span>, <span class="term" data-term="gen_corr_h" tabindex="0">corr con h</span>); le colonne del probe sono vuote nelle run senza probe.</p>
   </div>
 </section>
 
@@ -237,7 +237,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
   <div class="grid g2" id="eqGrid"></div>
 
   <h3 class="subhead">La loss: come si calcola ogni termine</h3>
-  <p class="lede">La loss totale è la somma di quattro termini, ma non tutti addestrano il modello allo stesso modo. Per ciascuno: formula, come si calcola passo per passo, e se il suo gradiente arriva al corpo della rete.</p>
+  <p class="lede">La loss totale è la somma di quattro termini, ma non tutti addestrano il modello allo stesso modo. Nelle run nuove L_probe è disattivato (λ_probe = 0): restano tre termini e h, J veri non entrano mai nel training. Per ciascuno: formula, come si calcola passo per passo, e se il suo gradiente arriva al corpo della rete.</p>
   <div class="panel">
     <div class="math">\[ \mathcal L=\mathcal L_\text{pred}+\lambda_\text{phys}\mathcal L_\text{phys}+\lambda_\text{probe}\mathcal L_\text{probe}+\lambda_\theta\|\theta\|^2 \]</div>
     <p class="cap">Pesi della run selezionata: <span class="term" data-term="lam" tabindex="0">λ<sub>phys</sub> / λ<sub>probe</sub> / λ<sub>θ</sub></span> = <span class="mono" id="lamVals">0.1 / 1 / 1e-4</span>.</p>
@@ -257,6 +257,16 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <label for="runSel">Run <select id="runSel"></select></label>
     <label for="smoothSel">Smoothing <select id="smoothSel"><option value="0">nessuno</option><option value="0.6" selected>EMA 0.6</option><option value="0.9">EMA 0.9</option></select></label>
   </div>
+  <div class="panel" id="convPanel">
+    <div class="ph"><h3><span class="term" data-term="conv" tabindex="0">Convergenza</span>: metriche di validazione contro lo step</h3><span class="cap" id="convCap">validazione ogni eval_every step</span></div>
+    <div class="grid g3">
+      <div><h4 class="subh">Fidelity media <span class="term" data-term="fidmean" tabindex="0">F̄₂</span> (k = 1…16)</h4><div class="legend" id="lgConvF"></div><div class="chart short"><canvas id="cConvF"></canvas></div></div>
+      <div><h4 class="subh"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub>(1)</span></h4><div class="chart short"><canvas id="cConvR"></canvas></div></div>
+      <div><h4 class="subh"><span class="term" data-term="kstar" tabindex="0">k*</span></h4><div class="chart short"><canvas id="cConvK"></canvas></div></div>
+    </div>
+    <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · una linea per ogni contesto <span class="term" data-term="T" tabindex="0">T</span></div>
+    <p class="how"><b>Come leggerlo.</b> Se le curve salgono (fidelity, k*) o scendono (RMSE) ancora a fine training, il modello non è convergente e servono più step. Se sono piatte, aggiungere step non aiuta: il limite è l'architettura o la loss.</p>
+  </div>
   <div class="grid g2" id="trainGrid">
     <div class="panel"><div class="ph"><h3><span class="term" data-term="Ltot" tabindex="0">Loss totale</span> e <span class="term" data-term="Lpred" tabindex="0">\(\mathcal L_\text{pred}\)</span></h3><span class="cap">scala log</span></div><div class="legend" id="lgLoss"></div><div class="chart"><canvas id="cLoss"></canvas></div>
       <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="Ltot" tabindex="0">loss</span> (log)</div>
@@ -264,7 +274,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <div class="panel"><div class="ph"><h3>Contributi pesati alla loss</h3><span class="cap">peso × valore, scala log</span></div><div class="legend" id="lgContrib"></div><div class="chart"><canvas id="cContrib"></canvas></div>
       <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: <span class="term" data-term="lam" tabindex="0">λ</span> × termine</div>
       <p class="how"><b>Come leggerlo.</b> Mostra quanto pesa davvero ogni termine nella somma. Un termine molto sotto <span class="term" data-term="Lpred" tabindex="0">L<sub>pred</sub></span> (per esempio <span class="term" data-term="Ltheta" tabindex="0">‖θ‖²</span> con λ = 10⁻⁴) ha effetto trascurabile.</p></div>
-    <div class="panel"><div class="ph"><h3>Probe: <span class="term" data-term="probe_h" tabindex="0">\(h\)</span>, <span class="term" data-term="probe_J" tabindex="0">\(J\)</span>, <span class="term" data-term="probe_a" tabindex="0">adiacenza</span></h3><span class="cap">stop-grad: misura, non influenza il corpo</span></div><div class="legend" id="lgProbe"></div><div class="chart"><canvas id="cProbe"></canvas></div>
+    <div class="panel"><div class="ph"><h3 id="probeTrTitle">Probe: <span class="term" data-term="probe_h" tabindex="0">\(h\)</span>, <span class="term" data-term="probe_J" tabindex="0">\(J\)</span>, <span class="term" data-term="probe_a" tabindex="0">adiacenza</span></h3><span class="cap">stop-grad: misura, non influenza il corpo</span></div><div class="legend" id="lgProbe"></div><div class="chart"><canvas id="cProbe"></canvas></div>
       <div class="axes">x: <span class="term" data-term="step" tabindex="0">step</span> · y: errore del <span class="term" data-term="probe" tabindex="0">probe</span> (log)</div>
       <p class="how"><b>Come leggerlo.</b> Se l'errore scende, l'informazione sull'Hamiltoniana diventa leggibile nelle feature. Un errore che resta piatto indica che quella grandezza non è codificata (si veda la versione normalizzata nella sezione Grafo inferito).</p></div>
     <div class="panel"><div class="ph"><h3><span class="term" data-term="Lphys" tabindex="0">\(\mathcal L_\text{phys}\)</span></h3><span class="cap">negatività di <span class="term" data-term="rho" tabindex="0">\(\hat\rho_{ij}\)</span>, deve andare a 0</span></div><div class="chart short"><canvas id="cPhys"></canvas></div>
