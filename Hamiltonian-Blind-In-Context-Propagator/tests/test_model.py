@@ -46,7 +46,8 @@ def test_permutation_equivariance(tiny_cfg):
             outp = model(node[:, :, perm], edge[:, :, perm][:, :, :, perm], dt, anchors, Tl)
         assert torch.allclose(outp["node"], out["node"][..., perm, :], atol=1e-5)
         assert torch.allclose(outp["edge"], out["edge"][..., perm, :, :][..., perm, :], atol=1e-5)
-        assert torch.allclose(outp["probe"]["J"], out["probe"]["J"][:, perm][:, :, perm], atol=1e-5)
+        if "probe" in out:
+            assert torch.allclose(outp["probe"]["J"], out["probe"]["J"][:, perm][:, :, perm], atol=1e-5)
 
 
 def test_causality(tiny_cfg):
@@ -153,8 +154,9 @@ def test_generator_without_dissipation_is_skew():
 
 
 def test_new_pair_components_are_active(tiny_cfg):
-    """The three architecture options are on in the default config and change the output."""
-    assert tiny_cfg["model"]["pair_attn"] and tiny_cfg["model"]["triangle"] and tiny_cfg["model"]["pair_latent"]
+    """When switched on, the three architecture options change the output."""
+    tiny_cfg = copy.deepcopy(tiny_cfg)
+    tiny_cfg["model"].update(pair_attn=True, triangle=True, pair_latent=8)
     node, edge, dt = random_inputs(1, 12, 5)
     node, edge, dt = node.double(), edge.double(), dt.double()
     args = (node, edge, dt, torch.tensor([[11]]), torch.tensor([11]))
@@ -194,3 +196,61 @@ def test_pair_latent_keeps_edge_symmetry_and_is_stable():
     assert torch.allclose(out["edge"], out["edge"].transpose(-2, -3)[..., swap], atol=1e-12)
     u = head.pair_rollout(e, torch.full((2,), 0.1).double(), 30)
     assert (u.norm(dim=-1) <= u[:, 0:1].norm(dim=-1) * (1 + 1e-9) + 1e-9).all()  # skew generator: norm kept
+
+
+def test_defaults_have_no_probe_and_no_probe_loss(tiny_cfg, tiny_h5):
+    assert tiny_cfg["model"]["probe"] is False and tiny_cfg["loss"]["lambda_probe"] == 0
+    assert not any(k.startswith("probe.") for k in Propagator(tiny_cfg).state_dict())
+    old = copy.deepcopy(tiny_cfg)
+    del old["model"]["probe"]  # old configs: probe present
+    assert any(k.startswith("probe.") for k in Propagator(old).state_dict())
+    ds = TrajectoryDataset(tiny_h5, (12, 12), tiny_cfg["train"]["H"], anchors=1, permute=False)
+    b = collate([ds[0]])
+    tn, te = gather_targets(b, tiny_cfg["train"]["H"])
+    pred = Propagator(tiny_cfg)(b["node"], b["edge"], b["dt"], b["anchors"], b["T"])
+    assert "probe" not in pred
+    assert total_loss(pred, b, tn, te, tiny_cfg)[1]["probe"] == 0
+
+
+def pauli_model(tiny_cfg, **kw):
+    cfg = copy.deepcopy(tiny_cfg)
+    cfg["model"].update(pauli_A=True, m=8, **kw)
+    torch.manual_seed(0)
+    m = Propagator(cfg).double().eval()
+    torch.nn.init.normal_(m.head.coef[-1].weight, std=0.1)
+    return m
+
+
+def test_pauli_basis_real_orthogonal():
+    from model.head_generator import pauli_basis
+    B = pauli_basis(8, 2).double()
+    assert len(B) == 1 + 3 * 3 + 9 * 3  # weight <= 2 on 3 qubits
+    gram = torch.einsum("sab,tab->st", B, B)
+    assert torch.allclose(gram, 8 * torch.eye(len(B)).double(), atol=1e-12)
+    assert len(pauli_basis(8, 0)) == 64
+    try:
+        pauli_basis(6)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_pauli_A_skew_equivariant_causal(tiny_cfg):
+    model = pauli_model(tiny_cfg)
+    node, edge, dt = random_inputs(2, 12, 5)
+    node, edge, dt = node.double(), edge.double(), dt.double()
+    anchors, Tl = torch.tensor([[11], [11]]), torch.tensor([11, 11])
+    perm = torch.randperm(5)
+    with torch.no_grad():
+        out = model(node, edge, dt, anchors, Tl)
+        outp = model(node[:, :, perm], edge[:, :, perm][:, :, :, perm], dt, anchors, Tl)
+        assert torch.allclose(out["G"], -out["G"].transpose(-1, -2), atol=1e-12)
+        assert out["gate"].max() <= 1 + 1e-9 and out["diag_norm"].shape == (2, 1, 5)
+        assert torch.allclose(outp["node"], out["node"][..., perm, :], atol=1e-5)
+        assert torch.allclose(outp["gate"], out["gate"][..., perm, :][..., perm], atol=1e-5)
+        node2, edge2 = node.clone(), edge.clone()
+        node2[:, 8:] = 0.3
+        edge2[:, 8:] *= -1
+        a = model(node, edge, dt, torch.tensor([[7], [7]]), Tl)["node"]
+        b = model(node2, edge2, dt, torch.tensor([[7], [7]]), Tl)["node"]
+        assert torch.allclose(a, b, atol=1e-10)

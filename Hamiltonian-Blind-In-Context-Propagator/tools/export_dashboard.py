@@ -67,7 +67,7 @@ _GROUPS = [
     (r"^body\.blocks\.\d+\.temporal\.", "temporal_node"),
     (r"^body\.ln_h", "final_ln_node"),
     (r"^body\.ln_e", "final_ln_pair"),
-    (r"^head\.(w_g|w_A|w_u|w_C|D_u)", "head_pair"),
+    (r"^head\.(w_g|w_A|w_u|w_C|D_u|coef)", "head_pair"),
     (r"^head\.", "head_node_and_generator"),
     (r"^probe\.", "probe"),
 ]
@@ -188,14 +188,20 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
                       return_attn=True)
         name = f"model({model.head_type})"
         preds[name] = (p["node"][0, 0].numpy(), p["edge"][0, 0].numpy())
-        extra["probe"] = dict(h=_r(p["probe"]["h"][0].numpy(), 4), J=_r(p["probe"]["J"][0].numpy(), 4),
-                              adj=_r(torch.sigmoid(p["probe"]["adj_logit"][0]).numpy(), 4))
+        if "probe" in p:
+            extra["probe"] = dict(h=_r(p["probe"]["h"][0].numpy(), 4), J=_r(p["probe"]["J"][0].numpy(), 4),
+                                  adj=_r(torch.sigmoid(p["probe"]["adj_logit"][0]).numpy(), 4))
+        if "G" in p:  # block norms of the effective generator, for the a-posteriori read-out
+            from eval.metrics import block_norms
+            extra["G_norm"] = _r(block_norms(p["G"].numpy(), n)[0], 4)
         if "gate" in p:
             extra["gate"] = _r(p["gate"][0, 0].numpy(), 4)
             ev = np.linalg.eigvals(p["G"][0].double().numpy())
             extra["G_eig"] = dict(re=_r(ev.real, 5), im=_r(ev.imag, 5),
                                   max_re=float(ev.real.max()), S_F=float(p["S_F"][0, 0]))
             extra["theta"] = _r(p["theta"][0, 0].numpy(), 4)
+            if "diag_norm" in p:
+                extra["diag_norm"] = _r(p["diag_norm"][0, 0].numpy(), 4)
         if "attn" in p:
             a = torch.stack([x.float().mean((1, 2)) for x in p["attn"]]).mean(0)[0]
             extra["attn"] = _r((0.5 * (a + a.T)).numpy(), 4)

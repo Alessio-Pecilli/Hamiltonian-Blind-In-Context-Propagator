@@ -99,6 +99,20 @@ def r2(pred: np.ndarray, true: np.ndarray) -> float:
     return float(1 - ((pred - true) ** 2).sum() / ss) if ss > 0 else float("nan")
 
 
+def pearson(x: np.ndarray, y: np.ndarray) -> float:
+    x, y = np.asarray(x, float).ravel(), np.asarray(y, float).ravel()
+    if len(x) < 2 or x.std() == 0 or y.std() == 0:
+        return float("nan")
+    return float(np.corrcoef(x, y)[0, 1])
+
+
+def block_norms(G: np.ndarray, n: int) -> np.ndarray:
+    """(N, nm, nm) -> (N, n, n) Frobenius norms of the m x m blocks of the effective generator."""
+    N, nm, _ = G.shape
+    m = nm // n
+    return np.sqrt((G.reshape(N, n, m, n, m) ** 2).sum((2, 4)))
+
+
 def upper_pairs(x: np.ndarray) -> np.ndarray:
     """(N, n, n) -> (N, n(n-1)/2) upper-triangular entries."""
     n = x.shape[-1]
@@ -128,7 +142,7 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
         loader = make_loader(path, (T, T), Hk, 1, batch_size, shuffle=False, permute=False,
                              fixed_T=T, fixed_t0=t0, num_workers=num_workers)
         rn_all, re_all, fid_all, gate, attn, adj, J, h = [], [], [], [], [], [], [], []
-        pJ, ph, padj, S_F = [], [], [], []
+        pJ, ph, padj, S_F, Gn = [], [], [], [], []
         n_steps, t_model = 0, 0.0
         for bi, batch in enumerate(loader):
             if max_batches is not None and bi >= max_batches:
@@ -153,9 +167,12 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             adj.append(batch["adj"].cpu().numpy())
             J.append(batch["J"].cpu().numpy())
             h.append(batch["h"].cpu().numpy())
-            pJ.append(pred["probe"]["J"].cpu().numpy())
-            ph.append(pred["probe"]["h"].cpu().numpy())
-            padj.append(pred["probe"]["adj_logit"].cpu().numpy())
+            if "probe" in pred:
+                pJ.append(pred["probe"]["J"].cpu().numpy())
+                ph.append(pred["probe"]["h"].cpu().numpy())
+                padj.append(pred["probe"]["adj_logit"].cpu().numpy())
+            if "G" in pred:
+                Gn.append(block_norms(pred["G"].cpu().numpy(), batch["h"].shape[-1]))
             if "gate" in pred:
                 gate.append(pred["gate"][:, 0].cpu().numpy())
                 S_F.append(pred["S_F"][:, 0].cpu().numpy())
@@ -175,10 +192,17 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             res["S_F"] = float(np.concatenate(S_F).mean())
         if attn:
             res["auroc_attn"] = auroc(upper_pairs(np.concatenate(attn)), adj_u)
-        pJ_u = upper_pairs(np.concatenate(pJ))
-        res["probe_r2_J"] = r2(pJ_u[adj_u], J_u[adj_u])
-        res["probe_r2_h"] = r2(np.concatenate(ph), h)
-        res["probe_auroc_adj"] = auroc(upper_pairs(np.concatenate(padj)), adj_u)
+        if Gn:  # read-out from the effective generator G (true h, J, adj only used here, after the fact)
+            Gn = np.concatenate(Gn)
+            gu = upper_pairs(Gn)
+            res["gen_auroc_adj"] = auroc(gu, adj_u)
+            res["gen_corr_J"] = pearson(gu[adj_u], J_u[adj_u])
+            res["gen_corr_h"] = pearson(np.diagonal(Gn, axis1=-2, axis2=-1), h)
+        if pJ:
+            pJ_u = upper_pairs(np.concatenate(pJ))
+            res["probe_r2_J"] = r2(pJ_u[adj_u], J_u[adj_u])
+            res["probe_r2_h"] = r2(np.concatenate(ph), h)
+            res["probe_auroc_adj"] = auroc(upper_pairs(np.concatenate(padj)), adj_u)
         results[T] = res
     model.train()
     return results

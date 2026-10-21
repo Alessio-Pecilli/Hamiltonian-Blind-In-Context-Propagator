@@ -80,7 +80,10 @@ def total_loss(pred: dict, batch: dict, tn, te, cfg: dict):
     w = k_weights(H, lc.get("w_k", "uniform"), tn.device)  # (H,)
     l_pred = pred_loss(pred["node"], pred["edge"], tn, te, w)
     l_phys = phys_loss(pred["node"], pred["edge"]) if lc["lambda_phys"] > 0 else tn.new_zeros(())
-    l_probe, probe_logs = probe_loss(pred["probe"], batch)
+    if "probe" in pred and lc["lambda_probe"] > 0:  # never a target of the body: only for the old runs
+        l_probe, probe_logs = probe_loss(pred["probe"], batch)
+    else:
+        l_probe, probe_logs = tn.new_zeros(()), {}
     l_theta = (pred["theta"] ** 2).sum(-1).mean() if "theta" in pred else tn.new_zeros(())
     loss = l_pred + lc["lambda_phys"] * l_phys + lc["lambda_probe"] * l_probe \
         + lc["lambda_theta"] * l_theta

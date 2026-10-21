@@ -26,12 +26,14 @@ class Propagator(nn.Module):
         if self.head_type == "A":
             self.head = GeneratorHead(m["d"], m["de"], m["m"], m["K"], m.get("basis_std", 0.02),
                                       m.get("use_S", True),  # absent in old configs = trained with S
-                                      m.get("pair_latent", 0))
+                                      m.get("pair_latent", 0), m.get("pauli_A", False),
+                                      m.get("pauli_weight", 2))
         elif self.head_type == "B":
             self.head = FreeHead(m["d"], m["de"], self.horizon)
         else:
             raise ValueError(self.head_type)
-        self.probe = Probe(m["d"], m["de"])
+        # absent in old configs = trained with the probe (keeps old checkpoints loadable)
+        self.probe = Probe(m["d"], m["de"]) if m.get("probe", True) else None
         self.amp = m.get("bf16", True)
 
     def _autocast(self, device):
@@ -66,7 +68,10 @@ class Propagator(nn.Module):
         if self.head_type == "A":
             pred.update(theta=res["theta"].view(B, A, -1), gate=res["gate"].view(B, A, n, n),
                         S_F=res["S_F"].view(B, A), G=res["G"])
-        pred["probe"] = self.probe(h[bidx, T], e[bidx, T])
+            if "diag_norm" in res:
+                pred["diag_norm"] = res["diag_norm"].view(B, A, n)
+        if self.probe is not None:
+            pred["probe"] = self.probe(h[bidx, T], e[bidx, T])
         if return_attn:
             pred["attn"] = out[2]
         return pred

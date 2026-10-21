@@ -14,15 +14,18 @@ common:
     conv_kernel: 4
     rope: true
     basis_std: 0.02
-    pair_attn: true        # causal temporal attention on the pair features (else depthwise conv only)
-    triangle: true         # triangular update of e_ij from e_ik, e_jk
-    pair_latent: 8         # dimension of the per-pair latent propagated by the head (0 = off)
+    pair_attn: false       # causal temporal attention on the pair features (else depthwise conv only)
+    triangle: false        # triangular update of e_ij from e_ik, e_jk
+    pair_latent: 0         # dimension of the per-pair latent propagated by the head (0 = off)
+    probe: false           # linear probe of (h, J, adj): evaluation-only tool, never needed by the loss
+    pauli_A: false         # one MLP -> coefficients on a fixed Pauli basis of the latent space for every A_ij
+    pauli_weight: 2        # max Pauli weight of the basis strings (0 = all 4^q); m must be 2^q
     use_S: false           # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
     bf16: true             # bf16 autocast for the body on CUDA; head always float32
     checkpointing: false
   loss:
     lambda_phys: 0.1
-    lambda_probe: 1.0
+    lambda_probe: 0.0
     lambda_theta: 1.0e-4
     w_k: uniform           # uniform | linear  (w_k proportional to k, normalised to mean 1)
   optim:
@@ -34,11 +37,11 @@ common:
     grad_clip: 1.0
   train:
     min_anchor: 8
-    eval_every: 5000
+    eval_every: 1000
     eval_T: [8, 16, 32, 64]  # context lengths used for quick validation
     eval_batches: 10
     log_every: 50
-    ckpt_every: 5000
+    ckpt_every: 500
     out_dir: runs/default
     seed: 0
 

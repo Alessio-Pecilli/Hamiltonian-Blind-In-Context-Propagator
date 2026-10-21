@@ -77,7 +77,9 @@ def main():
         for T, r in res.items():
             print(f"  model        T={T:4d}  rmse_n(1)={r['rmse_n'][0]:.4f}  rmse_n(H)={r['rmse_n'][-1]:.4f}  "
                   f"k*={r['k_star']}  AUROC gate={r.get('auroc_gate', float('nan')):.3f} "
-                  f"attn={r.get('auroc_attn', float('nan')):.3f}  S_F={r.get('S_F', float('nan')):.3g}")
+                  f"attn={r.get('auroc_attn', float('nan')):.3f}  S_F={r.get('S_F', float('nan')):.3g}  "
+                  f"G: auroc={r.get('gen_auroc_adj', float('nan')):.3f} corrJ={r.get('gen_corr_J', float('nan')):.3f} "
+                  f"corrh={r.get('gen_corr_h', float('nan')):.3f}")
     if a.baselines:
         results.update(run_baselines(a.data, a.baselines, a.T, a.horizon, a.max_traj))
     with open(os.path.join(a.out, "results.json"), "w") as f:

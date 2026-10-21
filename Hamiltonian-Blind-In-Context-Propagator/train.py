@@ -70,7 +70,9 @@ def summarize_eval(res: dict) -> dict:
         out[f"T{T}/rmse_n_kH"] = r["rmse_n"][-1]
         out[f"T{T}/rmse_e_kH"] = r["rmse_e"][-1]
         out[f"T{T}/k_star"] = r["k_star"]
-        for k in ("auroc_gate", "auroc_attn", "probe_r2_J", "probe_r2_h", "S_F"):
+        out[f"T{T}/fid_mean16"] = float(np.mean(r["fidelity2"][:16]))
+        for k in ("auroc_gate", "auroc_attn", "gen_auroc_adj", "gen_corr_J", "gen_corr_h",
+                  "probe_r2_J", "probe_r2_h", "S_F"):
             if k in r:
                 out[f"T{T}/{k}"] = r[k]
     return out
