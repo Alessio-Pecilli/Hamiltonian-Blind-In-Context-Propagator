@@ -1,0 +1,12 @@
+params: 1,482,921  head=A  device=cpu
+step    1550  loss 1.042e+00  pred 7.971e-03  phys 0.00e+00  probe 1.034  S_F 0.000  lr 6.97e-05
+step    1600  loss 1.076e+00  pred 8.398e-03  phys 0.00e+00  probe 1.068  S_F 0.000  lr 6.17e-05
+step    1650  loss 1.057e+00  pred 1.114e-02  phys 0.00e+00  probe 1.046  S_F 0.000  lr 5.45e-05
+step    1700  loss 1.027e+00  pred 9.829e-03  phys 0.00e+00  probe 1.017  S_F 0.000  lr 4.82e-05
+step    1750  loss 1.039e+00  pred 1.179e-02  phys 0.00e+00  probe 1.027  S_F 0.000  lr 4.27e-05
+step    1800  loss 1.060e+00  pred 1.138e-02  phys 0.00e+00  probe 1.049  S_F 0.000  lr 3.82e-05
+step    1850  loss 1.115e+00  pred 1.146e-02  phys 0.00e+00  probe 1.104  S_F 0.000  lr 3.47e-05
+step    1900  loss 1.047e+00  pred 8.000e-03  phys 0.00e+00  probe 1.039  S_F 0.000  lr 3.21e-05
+step    1950  loss 1.016e+00  pred 9.098e-03  phys 0.00e+00  probe 1.007  S_F 0.000  lr 3.05e-05
+step    2000  loss 1.058e+00  pred 7.997e-03  phys 0.00e+00  probe 1.050  S_F 0.000  lr 3.00e-05
+  val: T8/rmse_n_k1=0.0553  T8/rmse_n_kH=0.147  T8/rmse_e_kH=0.0992  T8/k_star=0  T8/auroc_gate=0.683  T8/auroc_attn=0.504  T8/probe_r2_J=-4.23  T8/probe_r2_h=-0.114  T8/S_F=0  T16/rmse_n_k1=0.0479  T16/rmse_n_kH=0.125  T16/rmse_e_kH=0.0876  T16/k_star=1  T16/auroc_gate=0.669  T16/auroc_attn=0.494  T16/probe_r2_J=-3.85  T16/probe_r2_h=-0.00409  T16/S_F=0  T32/rmse_n_k1=0.0325  T32/rmse_n_kH=0.0948  T32/rmse_e_kH=0.0774  T32/k_star=3  T32/auroc_gate=0.652  T32/auroc_attn=0.457  T32/probe_r2_J=-3.74  T32/probe_r2_h=-0.0477  T32/S_F=0  T64/rmse_n_k1=0.0259  T64/rmse_n_kH=0.0822  T64/rmse_e_kH=0.0718  T64/k_star=3  T64/auroc_gate=0.648  T64/auroc_attn=0.435  T64/probe_r2_J=-2.86  T64/probe_r2_h=-0.0212  T64/S_F=0
