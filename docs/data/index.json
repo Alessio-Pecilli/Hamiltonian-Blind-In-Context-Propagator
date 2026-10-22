@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261022-084158_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
+  "latest": "runs/20261022-084205_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
   "exports": [
+    {
+      "file": "runs/20261022-084205_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
+      "label": "n8 B pauli_A (un generatore di Pauli per tutto A)",
+      "generated_at": "2026-10-22T08:42:05",
+      "git_commit": "162343582894a42b89912ec239c59c4d0217a50c",
+      "notes": "Run B: come A ma model.pauli_A=true. Contiene anche A."
+    },
     {
       "file": "runs/20261022-084158_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
       "label": "n8 A riferimento (no probe, no opzioni coppie, S off)",
