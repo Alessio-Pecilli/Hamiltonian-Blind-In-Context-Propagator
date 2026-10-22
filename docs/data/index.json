@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261015-221826_n8-pair-path-no-s-2k-step.json",
+  "latest": "runs/20261022-084158_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
   "exports": [
+    {
+      "file": "runs/20261022-084158_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
+      "label": "n8 A riferimento (no probe, no opzioni coppie, S off)",
+      "generated_at": "2026-10-22T08:41:58",
+      "git_commit": "9a598199e99a3a982aaf3e4708a28cd8e22c5987",
+      "notes": "Run A: riferimento, use_S=false, n=8, 8000 step, seed 0."
+    },
     {
       "file": "runs/20261015-221826_n8-pair-path-no-s-2k-step.json",
       "label": "n8 pair-path, no S, 2k step",
