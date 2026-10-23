@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261023-190833_n8-quad-readout-quadratico-z-t-c-z-hl-equo.json",
+  "latest": "runs/20261023-190843_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
   "exports": [
+    {
+      "file": "runs/20261023-190843_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
+      "label": "n8 B pauli_A (un generatore di Pauli per tutto A)",
+      "generated_at": "2026-10-23T19:08:43",
+      "git_commit": "5fb02f570d1008d9dbcc76ef49c9cf125b72b1f8",
+      "notes": "Run B: come A ma model.pauli_A=true. Stesso seed e stessi step di A. L export contiene anche A per il confronto."
+    },
     {
       "file": "runs/20261023-190833_n8-quad-readout-quadratico-z-t-c-z-hl-equo.json",
       "label": "n8 quad: readout quadratico z^T C z (+ HL equo)",
