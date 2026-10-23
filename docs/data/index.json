@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261022-084205_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
+  "latest": "runs/20261023-190826_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
   "exports": [
+    {
+      "file": "runs/20261023-190826_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
+      "label": "n8 A riferimento (no probe, no opzioni coppie, S off)",
+      "generated_at": "2026-10-23T19:08:26",
+      "git_commit": "fdc120fe476649aaacb1a808241e9448f92041f5",
+      "notes": "Run A: riferimento. pair_attn/triangle/pair_latent spenti, nessun L_probe, use_S=false, n=8, 8000 step, seed 0, validazione ogni 1000 step."
+    },
     {
       "file": "runs/20261022-084205_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
       "label": "n8 B pauli_A (un generatore di Pauli per tutto A)",
