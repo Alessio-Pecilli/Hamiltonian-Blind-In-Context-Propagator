@@ -43,9 +43,13 @@ def symmetrize_edge_channels(x: torch.Tensor) -> torch.Tensor:
 
 class GeneratorHead(nn.Module):
     def __init__(self, d: int, de: int, m: int, K: int, basis_std: float = 0.02, use_S: bool = True,
-                 pair_latent: int = 0, pauli_A: bool = False, pauli_weight: int = 2):
+                 pair_latent: int = 0, pauli_A: bool = False, pauli_weight: int = 2,
+                 readout: str = "linear"):
         super().__init__()
+        if readout not in ("linear", "quadratic"):
+            raise ValueError(readout)
         self.m, self.K, self.use_S, self.p, self.pauli_A = m, K, use_S, pair_latent, pauli_A
+        self.quadratic = readout == "quadratic"
         self.w_z = nn.Linear(d, m)
         if pauli_A:
             if use_S:
@@ -63,7 +67,11 @@ class GeneratorHead(nn.Module):
             nn.init.zeros_(self.w_A.bias)
             self.w_g = nn.Linear(de, 1)
         # decoders
-        self.D_n = nn.Linear(m, 3)
+        if self.quadratic:  # node_i^a = z_i^T C_a z_i + c_a: Born-rule-like, C_a shared by all sites
+            self.C = nn.Parameter(torch.randn(3, m, m) / m)
+            self.c0 = nn.Parameter(torch.zeros(3))
+        else:
+            self.D_n = nn.Linear(m, 3)
         self.B = nn.Parameter(torch.randn(9, m, m) / m)
         self.beta = nn.Parameter(torch.zeros(9))
         if pair_latent:  # per-pair latent u_ij in R^p, rotated by its own skew generator C_ij(e_ij)
@@ -119,13 +127,20 @@ class GeneratorHead(nn.Module):
 
     def decode(self, z: torch.Tensor, u: torch.Tensor | None = None):
         """z (..., n, m) [, pair latents u (..., n, n, p)] -> node (..., n, 3), edge (..., n, n, 9)."""
-        node = torch.tanh(self.D_n(z))
+        if self.quadratic:
+            C = 0.5 * (self.C + self.C.transpose(-1, -2))
+            node = torch.einsum("...im,akm,...ik->...ia", z, C, z) + self.c0
+        else:
+            node = torch.tanh(self.D_n(z))
         zB = torch.einsum("...im,cmk->...ick", z, self.B)
         x = torch.einsum("...ick,...jk->...ijc", zB, z)
         if u is not None:
             x = x + self.D_u(u)
-        edge = torch.tanh(symmetrize_edge_channels(x + self.beta))  # beta inside: symmetry holds exactly
-        return node, edge
+        edge = symmetrize_edge_channels(x + self.beta)  # beta inside: symmetry holds exactly
+        if not self.quadratic:
+            return node, torch.tanh(edge)
+        # no tanh (it distorts the quadratic structure); clamp at evaluation only, it would kill gradients in training
+        return (node, edge) if self.training else (node.clamp(-1, 1), edge.clamp(-1, 1))
 
     def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int):
         """h (N, n, d), e (N, n, n, de), dt (N,) ->
@@ -135,6 +150,8 @@ class GeneratorHead(nn.Module):
         G, theta, gate, S_F, *diag = self.generator(h, e)
         P = torch.linalg.matrix_exp(dt[:, None, None] * G)
         Z = self.w_z(h).reshape(N, n * self.m)
+        if self.quadratic:  # ||Z|| = sqrt(n), conserved by skew G (use_S=false): plays the role of <psi|psi> = 1
+            Z = Z * (n ** 0.5 / Z.norm(dim=-1, keepdim=True).clamp_min(1e-8))
         zs = []
         for _ in range(horizon):  # repeated mat-vec, never powers of P
             Z = (P @ Z[..., None]).squeeze(-1)

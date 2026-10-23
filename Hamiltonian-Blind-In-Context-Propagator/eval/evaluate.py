@@ -60,7 +60,7 @@ def main():
     ap.add_argument("--T", type=int, nargs="+", default=[8, 16, 32, 64, 128])
     ap.add_argument("--horizon", type=int, default=64)
     ap.add_argument("--baselines", nargs="*", default=["persistence", "dmd", "dmd4"],
-                    help="any of persistence dmd dmd4 oracle hl_oracle")
+                    help="any of persistence dmd dmd4 oracle hl_oracle hl_fair_o0 hl_fair_fit")
     ap.add_argument("--max_traj", type=int, default=None)
     ap.add_argument("--batch_size", type=int, default=16)
     ap.add_argument("--out", default="results")

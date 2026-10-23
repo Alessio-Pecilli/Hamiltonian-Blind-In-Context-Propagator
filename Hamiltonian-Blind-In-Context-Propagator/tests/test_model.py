@@ -254,3 +254,30 @@ def test_pauli_A_skew_equivariant_causal(tiny_cfg):
         a = model(node, edge, dt, torch.tensor([[7], [7]]), Tl)["node"]
         b = model(node2, edge2, dt, torch.tensor([[7], [7]]), Tl)["node"]
         assert torch.allclose(a, b, atol=1e-10)
+
+
+def test_quadratic_readout(tiny_cfg):
+    import numpy as np
+    cfg = copy.deepcopy(tiny_cfg)
+    cfg["model"].update(readout="quadratic", use_S=False)
+    model = make_model(cfg)
+    node, edge, dt = random_inputs(2, 12, 5)
+    node, edge, dt = node.double(), edge.double(), dt.double()
+    anchors, T = torch.tensor([[11], [11]]), torch.tensor([11, 11])
+    with torch.no_grad():
+        out = model(node, edge, dt, anchors, T)
+        assert out["node"].shape == (2, 1, cfg["train"]["H"], 5, 3)
+        assert torch.allclose(out["edge"], out["edge"].transpose(3, 4)[..., [3 * b + a for a in range(3) for b in range(3)]], atol=1e-10)
+        # the anchor latent is renormalised: its scale must not matter
+        model.head.w_z.weight.mul_(7.0); model.head.w_z.bias.mul_(7.0)
+        out2 = model(node, edge, dt, anchors, T)
+    assert torch.allclose(out["node"], out2["node"], atol=1e-8)
+    # mechanism: rotations at w1=3 and w2=2 give a node signal at w1+-w2 (and none at 3)
+    head = GeneratorHead(d=8, de=4, m=4, K=2, use_S=False, readout="quadratic").double().eval()
+    with torch.no_grad():
+        head.C.zero_(); head.C[0, 0, 2] = 1.0
+        t = torch.arange(64) * 2 * np.pi / 64
+        z = torch.stack([torch.cos(3 * t), torch.sin(3 * t), torch.cos(2 * t), torch.sin(2 * t)], -1)
+        node_t, _ = head.decode(z.double()[:, None, :])
+    spec = np.abs(np.fft.rfft(node_t[:, 0, 0].numpy()))
+    assert spec[5] > 10 * spec[3] and spec[1] > 10 * spec[3] and spec[5] > 1 and spec[1] > 1

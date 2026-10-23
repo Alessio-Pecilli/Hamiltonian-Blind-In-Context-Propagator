@@ -1,5 +1,6 @@
 """Baselines (Sec. 7.1), kept deliberately simple:
-  persistence, in-context ridge DMD (w=1 and w=4), oracle, Hamiltonian learning + oracle state.
+  persistence, in-context ridge DMD (w=1 and w=4), oracle, Hamiltonian learning + oracle state,
+  fair Hamiltonian learning (generic 2-local ansatz, context only; see eval/hl_fair.py).
 
 All functions work on one trajectory window: context node (T+1, n, 3), edge (T+1, n, n, 9),
 and return predictions node (H, n, 3), edge (H, n, n, 9) for steps T+1..T+H.
@@ -159,12 +160,16 @@ def hl_oracle(node, edge, H, attrs=None, seed=None, t_abs=None, **_):
     return pn.astype(np.float32), pe.astype(np.float32)
 
 
+from eval.hl_fair import hl_fair_fit, hl_fair_o0  # noqa: E402
+
 BASELINES = dict(
     persistence=persistence,
     dmd=lambda *a, **k: ridge_dmd(*a, w=1, **k),
     dmd4=lambda *a, **k: ridge_dmd(*a, w=4, **k),
     oracle=oracle,
     hl_oracle=hl_oracle,
+    hl_fair_o0=hl_fair_o0,
+    hl_fair_fit=hl_fair_fit,
 )
 
 

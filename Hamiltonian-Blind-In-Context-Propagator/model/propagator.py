@@ -27,7 +27,7 @@ class Propagator(nn.Module):
             self.head = GeneratorHead(m["d"], m["de"], m["m"], m["K"], m.get("basis_std", 0.02),
                                       m.get("use_S", True),  # absent in old configs = trained with S
                                       m.get("pair_latent", 0), m.get("pauli_A", False),
-                                      m.get("pauli_weight", 2))
+                                      m.get("pauli_weight", 2), m.get("readout", "linear"))
         elif self.head_type == "B":
             self.head = FreeHead(m["d"], m["de"], self.horizon)
         else:

@@ -20,7 +20,8 @@ common:
     probe: false           # linear probe of (h, J, adj): evaluation-only tool, never needed by the loss
     pauli_A: false         # one MLP -> coefficients on a fixed Pauli basis of the latent space for every A_ij
     pauli_weight: 2        # max Pauli weight of the basis strings (0 = all 4^q); m must be 2^q
-    use_S: false           # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
+    readout: linear        # linear = tanh(D z) (v0.1) | quadratic = z^T C z (Born-rule-like; use with use_S=false)
+    use_S: false          # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
     bf16: true             # bf16 autocast for the body on CUDA; head always float32
     checkpointing: false
   loss:

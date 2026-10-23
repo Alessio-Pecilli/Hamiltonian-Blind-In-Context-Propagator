@@ -111,6 +111,8 @@ const METHOD = {
   dmd: { c: "--s3", label: "DMD ridge w=1", g: "dmd1" },
   dmd4: { c: "--s4", label: "DMD ridge w=4", g: "dmd4" },
   hl_oracle: { c: "--s5", label: "HL + stato oracolo", g: "hl" },
+  hl_fair_o0: { c: "--s9", label: "HL equo (stato da o_0)", g: "hl" },
+  hl_fair_fit: { c: "--s10", label: "HL equo (stato fittato)", g: "hl" },
   oracle: { c: "--s6", label: "Oracolo", dash: true, g: "oracle" },
 };
 const base = (k) => k.split("/").pop();
@@ -201,7 +203,7 @@ function mergedMethods(sel) {
 }
 const curMethods = () => mergedMethods($("resSel").value);
 const methodOrder = (ms) => Object.keys(ms).sort((a, b) => {
-  const o = ["model(A)", "model(B)", "hl_oracle", "dmd", "dmd4", "persistence", "oracle"];
+  const o = ["model(A)", "model(B)", "hl_oracle", "hl_fair_o0", "hl_fair_fit", "dmd", "dmd4", "persistence", "oracle"];
   return (o.indexOf(base(a)) + 99 * !o.includes(base(a))) - (o.indexOf(base(b)) + 99 * !o.includes(base(b)));
 });
 const Ts = (ms) => [...new Set(Object.values(ms).flatMap((m) => Object.keys(m).map(Number)))].sort((a, b) => a - b);
