@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261023-190826_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
+  "latest": "runs/20261023-190833_n8-quad-readout-quadratico-z-t-c-z-hl-equo.json",
   "exports": [
+    {
+      "file": "runs/20261023-190833_n8-quad-readout-quadratico-z-t-c-z-hl-equo.json",
+      "label": "n8 quad: readout quadratico z^T C z (+ HL equo)",
+      "generated_at": "2026-10-23T19:08:33",
+      "git_commit": "cee7562306ee3a47d5a463c2b0123d6f9daab2a4",
+      "notes": "Run quad: come A ma model.readout=quadratic (nodi z^T C_a z, archi senza tanh, latente normalizzato a sqrt(n), clamp solo in valutazione). Stesso seed e stessi step di A. Include la baseline HL equa (2-locale generica, solo contesto) se calcolata."
+    },
     {
       "file": "runs/20261023-190826_n8-a-riferimento-no-probe-no-opzioni-coppie-s-off.json",
       "label": "n8 A riferimento (no probe, no opzioni coppie, S off)",
