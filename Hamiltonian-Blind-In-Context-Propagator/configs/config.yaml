@@ -20,6 +20,7 @@ common:
     probe: false           # linear probe of (h, J, adj): evaluation-only tool, never needed by the loss
     pauli_A: false         # one MLP -> coefficients on a fixed Pauli basis of the latent space for every A_ij
     pauli_weight: 2        # max Pauli weight of the basis strings (0 = all 4^q); m must be 2^q
+    residual: false        # anchor on the last observed frame: o_T + dec(z_k) - dec(z_0) (head A only)
     readout: linear        # linear = tanh(D z) (v0.1) | quadratic = z^T C z (Born-rule-like; use with use_S=false)
     use_S: false          # false = no dissipation (S = 0, G purely skew-symmetric): closed-system data
     bf16: true             # bf16 autocast for the body on CUDA; head always float32
@@ -28,6 +29,7 @@ common:
     lambda_phys: 0.1
     lambda_probe: 0.0
     lambda_theta: 1.0e-4
+    per_k_norm: false      # divide each k by the persistence error at that k (overrides w_k)
     w_k: uniform           # uniform | linear  (w_k proportional to k, normalised to mean 1)
   optim:
     lr: 3.0e-4
@@ -38,6 +40,8 @@ common:
     grad_clip: 1.0
   train:
     min_anchor: 8
+    var_horizon: false     # sample the horizon uniformly in [H_min, H] at every step
+    H_min: 4
     eval_every: 1000
     eval_T: [8, 16, 32, 64]  # context lengths used for quick validation
     eval_batches: 10

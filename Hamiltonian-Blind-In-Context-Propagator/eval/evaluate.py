@@ -38,7 +38,7 @@ def plot(results: dict, out_dir: str):
     for name, res in results.items():
         Ts = sorted(int(t) for t in res)
         ax.plot(Ts, [res[t]["k_star"] for t in Ts], "o-", label=name)
-    ax.set_xscale("log", base=2); ax.set_xlabel("context length T"); ax.set_ylabel("k* (eps=0.05)")
+    ax.set_xscale("log", base=2); ax.set_xlabel("context length T"); ax.set_ylabel("k* (eps=0.05)"); ax.set_ylim(0, 30)
     ax.legend(fontsize=8); fig.tight_layout(); fig.savefig(os.path.join(out_dir, "context_horizon.png"), dpi=150)
     # RMSE_n(k) at each T
     Ts = sorted({int(t) for r in results.values() for t in r})

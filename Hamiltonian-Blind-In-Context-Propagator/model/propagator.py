@@ -35,6 +35,9 @@ class Propagator(nn.Module):
         # absent in old configs = trained with the probe (keeps old checkpoints loadable)
         self.probe = Probe(m["d"], m["de"]) if m.get("probe", True) else None
         self.amp = m.get("bf16", True)
+        self.residual = m.get("residual", False)
+        if self.residual and self.head_type != "A":
+            raise ValueError("residual anchor needs head A")
 
     def _autocast(self, device):
         if self.amp and device.type == "cuda":
@@ -60,8 +63,13 @@ class Propagator(nn.Module):
         hA = h[bidx[:, None], anchors].reshape(B * A, n, -1)
         eA = e[bidx[:, None], anchors].reshape(B * A, n, n, -1)
         dtA = dt[:, None].expand(B, A).reshape(-1)
-        res = self.head(hA, eA, dtA, horizon)
+        o = None
+        if self.residual:  # observed frame at each anchor
+            o = (node[bidx[:, None], anchors].reshape(B * A, n, 3),
+                 edge[bidx[:, None], anchors].reshape(B * A, n, n, 9))
+        res = self.head(hA, eA, dtA, horizon, o) if self.residual else self.head(hA, eA, dtA, horizon)
         pred = dict(
+            node0=node[bidx[:, None], anchors], edge0=edge[bidx[:, None], anchors],  # observed at the anchor
             node=res["node"].view(B, A, horizon, n, 3),
             edge=res["edge"].view(B, A, horizon, n, n, 9),
         )

@@ -121,8 +121,9 @@ def main():
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             for g in opt.param_groups:
                 g["lr"] = lr_at(step, oc, total)
-            tn, te = gather_targets(batch, tc["H"])
-            pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"])
+            H = random.randint(tc.get("H_min", tc["H"]), tc["H"]) if tc.get("var_horizon") else tc["H"]
+            tn, te = gather_targets(batch, H)
+            pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H)
             loss, logs = total_loss(pred, batch, tn, te, cfg)
             opt.zero_grad(set_to_none=True)
             loss.backward()

@@ -256,7 +256,7 @@ function kstarCfg(ms, keys) {
     label: mLabel(k), _m: k, data: T.map((t) => (ms[k][t] ? ms[k][t].k_star : null)), borderColor: mColor(k), backgroundColor: mColor(k),
     borderDash: mInfo(k).dash ? [5, 4] : [], pointRadius: 4, pointBorderColor: css("--surface"), pointBorderWidth: 2, spanGaps: true })) },
     options: { interaction: hoverIdx, plugins: { tooltip: { callbacks: { footer: footerFor("kstar") } } },
-      scales: { x: axis("contesto T (passi)"), y: axis("k*", { beginAtZero: true }) } } };
+      scales: { x: axis("contesto T (passi)"), y: axis("k*", { min: 0, max: 30 }) } } };
 }
 function renderChecks(ms, mk_, T, r) {
   const rows = [];
@@ -341,7 +341,7 @@ function renderEval() {
     mk("cFid", { type: "line", data: { datasets: withF.map((k) => ({ label: mLabel(k), _m: k, data: ms[k][evalT].fidelity2.map((v, i) => ({ x: i + 1, y: v })),
       borderColor: mColor(k), backgroundColor: mColor(k), borderDash: mInfo(k).dash ? [5, 4] : [] })) },
       options: { parsing: false, interaction: hoverNear, plugins: { tooltip: { callbacks: { title: (it) => `k = ${it[0].parsed.x}`, label: (it) => ` ${it.dataset.label}: ${it.parsed.y.toFixed(4)}`, footer: footerFor("fid2") } } },
-        scales: { x: axis("passi nel futuro k", { type: "linear", min: 1, max: Hf }), y: axis("F₂", { min: 0, max: 1 }) } } });
+        scales: { x: axis("passi nel futuro k", { type: "linear", min: 1, max: Hf }), y: axis("F₂", { min: 0.8, max: 1 }) } } });
   }
   // tabella
   const nonOr = keys.filter((k) => base(k) !== "oracle");
@@ -408,7 +408,7 @@ function renderSample() {
   if (!withF.length) setEmpty("cSampleFid", "Fidelity non presente in questo export (rigenera con tools.export_dashboard aggiornato)");
   else mk("cSampleFid", { type: "line", data: { datasets: withF.map((k) => ({ label: mLabel(k), _m: k, data: s.preds[k].fid2.map((v, q) => ({ x: q + 1, y: v })), borderColor: mColor(k), backgroundColor: mColor(k), borderDash: mInfo(k).dash ? [5, 4] : [] })) },
     options: { parsing: false, interaction: hoverNear, plugins: { tooltip: { callbacks: { title: (it) => `k = ${it[0].parsed.x}`, label: (it) => ` ${it.dataset.label}: ${it.parsed.y.toFixed(4)}`, footer: footerFor("fidtraj") } } },
-      scales: { x: axis("k", { type: "linear", min: 1, max: H }), y: axis("F₂", { min: 0, max: 1 }) } } });
+      scales: { x: axis("k", { type: "linear", min: 1, max: H }), y: axis("F₂", { min: 0.8, max: 1 }) } } });
   mk("cSampleErr", { type: "line", data: { datasets: keys.map((k) => ({ label: mLabel(k), _m: k, data: s.preds[k].rmse_n.map((v, q) => ({ x: q + 1, y: Math.max(v, floor) })), borderColor: mColor(k), backgroundColor: mColor(k), borderDash: mInfo(k).dash ? [5, 4] : [] })) },
     options: { parsing: false, interaction: hoverNear, plugins: { tooltip: { callbacks: { title: (it) => `k = ${it[0].parsed.x}`, label: (it) => ` ${it.dataset.label}: ${it.parsed.y.toFixed(4)}`, footer: footerFor("rmse_n") } } },
       scales: { x: axis("k", { type: "linear", min: 1, max: H }), y: axis(null, { type: "logarithmic", min: floor }) } } });

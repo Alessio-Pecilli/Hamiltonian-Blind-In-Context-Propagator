@@ -31,15 +31,24 @@ def k_weights(H: int, mode: str, device) -> torch.Tensor:
     return torch.ones(H, device=device)
 
 
-def pred_loss(pn, pe, tn, te, w_k=None):
-    """pn/tn (..., H, n, 3), pe/te (..., H, n, n, 9). Mean square over 3n node entries plus mean
-    square over 9n(n-1) off-diagonal edge entries, averaged over anchors and k (Eq. 27)."""
+def _sq_err(pn, pe, tn, te):
+    """(..., H): mean square over 3n node entries plus mean square over 9n(n-1) off-diagonal edge entries."""
     n = pn.shape[-2]
-    ln = ((pn - tn) ** 2).mean((-1, -2))                                   # (..., H)
+    ln = ((pn - tn) ** 2).mean((-1, -2))
     mask = offdiag(n, pn.device)[..., None]
-    le = (((pe - te) ** 2) * mask).sum((-1, -2, -3)) / (9 * n * (n - 1))   # (..., H)
-    l = ln + le
-    if w_k is not None:
+    le = (((pe - te) ** 2) * mask).sum((-1, -2, -3)) / (9 * n * (n - 1))
+    return ln + le
+
+
+def pred_loss(pn, pe, tn, te, w_k=None, anchor=None):
+    """pn/tn (..., H, n, 3), pe/te (..., H, n, n, 9). Averaged over anchors and k (Eq. 27).
+    anchor = (node0 (B, A, n, 3), edge0 (B, A, n, n, 9)): per-k normalisation, each k divided by the
+    batch persistence error at that k (detached), so no horizon dominates."""
+    l = _sq_err(pn, pe, tn, te)                                            # (B, A, H)
+    if anchor is not None:
+        p = _sq_err(anchor[0][..., None, :, :], anchor[1][..., None, :, :, :], tn, te)
+        l = l / (p.detach().mean((0, 1)) + 1e-6)
+    elif w_k is not None:
         l = l * w_k
     return l.mean()
 
@@ -78,7 +87,8 @@ def total_loss(pred: dict, batch: dict, tn, te, cfg: dict):
     lc = cfg["loss"]
     H = tn.shape[2]
     w = k_weights(H, lc.get("w_k", "uniform"), tn.device)  # (H,)
-    l_pred = pred_loss(pred["node"], pred["edge"], tn, te, w)
+    anchor = (pred["node0"], pred["edge0"]) if lc.get("per_k_norm", False) else None
+    l_pred = pred_loss(pred["node"], pred["edge"], tn, te, w, anchor)
     l_phys = phys_loss(pred["node"], pred["edge"]) if lc["lambda_phys"] > 0 else tn.new_zeros(())
     if "probe" in pred and lc["lambda_probe"] > 0:  # never a target of the body: only for the old runs
         l_probe, probe_logs = probe_loss(pred["probe"], batch)

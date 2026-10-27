@@ -142,7 +142,7 @@ class GeneratorHead(nn.Module):
         # no tanh (it distorts the quadratic structure); clamp at evaluation only, it would kill gradients in training
         return (node, edge) if self.training else (node.clamp(-1, 1), edge.clamp(-1, 1))
 
-    def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int):
+    def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int, o=None):
         """h (N, n, d), e (N, n, n, de), dt (N,) ->
         node (N, H, n, 3), edge (N, H, n, n, 9) + diagnostics. Runs in float32."""
         h, e, dt = at_least_fp32(h, e, dt)
@@ -152,6 +152,7 @@ class GeneratorHead(nn.Module):
         Z = self.w_z(h).reshape(N, n * self.m)
         if self.quadratic:  # ||Z|| = sqrt(n), conserved by skew G (use_S=false): plays the role of <psi|psi> = 1
             Z = Z * (n ** 0.5 / Z.norm(dim=-1, keepdim=True).clamp_min(1e-8))
+        Z0 = Z
         zs = []
         for _ in range(horizon):  # repeated mat-vec, never powers of P
             Z = (P @ Z[..., None]).squeeze(-1)
@@ -159,6 +160,11 @@ class GeneratorHead(nn.Module):
         z = torch.stack(zs, 1).view(N, horizon, n, self.m)
         u = self.pair_rollout(e, dt, horizon) if self.p else None
         node, edge = self.decode(z, u)
+        if o is not None:  # residual anchor: o_T + dec(z_k) - dec(z_0), error -> 0 as k -> 0
+            if self.p:
+                raise ValueError("residual anchor does not support pair_latent")
+            n0, e0 = self.decode(Z0.view(N, 1, n, self.m))
+            node, edge = o[0][:, None] + node - n0, o[1][:, None] + edge - e0
         out = dict(node=node, edge=edge, theta=theta, gate=gate, S_F=S_F, G=G, z=z)
         if diag:
             out["diag_norm"] = diag[0]
