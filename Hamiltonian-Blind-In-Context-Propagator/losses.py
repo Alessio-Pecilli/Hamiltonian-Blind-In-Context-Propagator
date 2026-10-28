@@ -70,7 +70,9 @@ def rho_pairs(pn: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
 
 def phys_loss(pn, pe):
     """mean relu(-lambda_min(rho_ij)) over pairs, anchors, horizons."""
-    lam = torch.linalg.eigvalsh(rho_pairs(pn.float(), pe.float()))[..., 0]
+    rho = rho_pairs(pn.float(), pe.float()).reshape(-1, 4, 4)
+    # chunked: cuSOLVER batched eigvalsh allocates a huge workspace for ~3e4 matrices (OOM at H = 64)
+    lam = torch.cat([torch.linalg.eigvalsh(c)[:, 0] for c in rho.split(2048)])
     return F.relu(-lam).mean()
 
 
