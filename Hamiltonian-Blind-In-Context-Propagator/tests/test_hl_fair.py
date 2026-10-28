@@ -44,3 +44,10 @@ def test_trajectory_fit_recovers_forecast():
     fr, theta, psi, obs, node, edge = _setup(n=3, L=12)
     th, ps, loss = hl_fair.fit(node, edge, 0.1, fit_psi=True, iters=300)
     assert loss < 1e-4
+
+
+def test_ehrenfest_system_is_consistent_with_true_theta():
+    # catches the pair-index bug: couplings seen from the site i > j must land in the same column
+    fr, theta, psi, obs, node, edge = _setup(n=4, L=40, dt=0.01)
+    A, b = hl_fair.ehrenfest_system(node, edge, 0.01)
+    assert np.linalg.norm(A @ theta - b) < 1e-2 * np.linalg.norm(b)

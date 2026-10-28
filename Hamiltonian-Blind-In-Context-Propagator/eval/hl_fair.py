@@ -95,6 +95,7 @@ def ehrenfest_system(node, edge, dt):
     iu, ju = np.triu_indices(n, 1)
     pair = -np.ones((n, n), int)
     pair[iu, ju] = np.arange(len(iu))
+    pair[ju, iu] = pair[iu, ju]  # symmetric table: the i > j view uses the same column
     K = 3 * n + 9 * len(iu)
     mid_n, mid_e = node[1:-1], edge[1:-1]
     d = (node[2:] - node[:-2]) / (2 * dt)
