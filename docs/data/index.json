@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261028-170935_n8-residual-anchor-20k-step.json",
+  "latest": "runs/20261028-170942_n8-residual-orizzonte-variabile-loss-per-k-20k-step.json",
   "exports": [
+    {
+      "file": "runs/20261028-170942_n8-residual-orizzonte-variabile-loss-per-k-20k-step.json",
+      "label": "n8 residual + orizzonte variabile + loss per-k, 20k step",
+      "generated_at": "2026-10-28T17:09:42",
+      "git_commit": "3e86d6be957c6b518fbdeee41b92e0b22c88359c",
+      "notes": "Residual + orizzonte variabile (H uniforme in [16, 64]) + loss normalizzata per k (errore della persistenza). 20000 step, 1000 Hamiltoniane."
+    },
     {
       "file": "runs/20261028-170935_n8-residual-anchor-20k-step.json",
       "label": "n8 residual anchor, 20k step",
