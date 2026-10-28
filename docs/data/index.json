@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261023-190843_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
+  "latest": "runs/20261028-170935_n8-residual-anchor-20k-step.json",
   "exports": [
+    {
+      "file": "runs/20261028-170935_n8-residual-anchor-20k-step.json",
+      "label": "n8 residual anchor, 20k step",
+      "generated_at": "2026-10-28T17:09:35",
+      "git_commit": "a50ccfb2dbc41f96ac63d64291c4a3f63a0b4acf",
+      "notes": "Residual anchor o_T + dec(z_k) - dec(z_0): l errore va a 0 per k -> 0. 20000 step (A: 8000), 1000 Hamiltoniane, seed 0."
+    },
     {
       "file": "runs/20261023-190843_n8-b-pauli-a-un-generatore-di-pauli-per-tutto-a.json",
       "label": "n8 B pauli_A (un generatore di Pauli per tutto A)",
