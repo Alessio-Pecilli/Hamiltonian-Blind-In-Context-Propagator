@@ -59,8 +59,10 @@ class Logger:
 
 
 def save_ckpt(path, model, opt, step, cfg):
+    # write-then-rename: a disconnect mid-write on Drive must not corrupt last.pt
     torch.save(dict(model=model.state_dict(), opt=opt.state_dict(), step=step, config=cfg,
-                    git_commit=git_commit()), path)
+                    git_commit=git_commit()), path + ".tmp")
+    os.replace(path + ".tmp", path)
 
 
 def summarize_eval(res: dict) -> dict:
