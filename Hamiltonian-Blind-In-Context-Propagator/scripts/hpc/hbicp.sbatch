@@ -4,7 +4,7 @@
 #SBATCH --error=logs/hbicp_%j.err
 #SBATCH --partition=boost_usr_prod
 #SBATCH --qos=boost_qos_lprod
-#SBATCH --account=iscrc_qusala
+#SBATCH --account=iscrc_manqo-gp
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

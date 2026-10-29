@@ -51,6 +51,6 @@ GH_TOKEN=<token> python scripts/hpc/publish.py      # n8_resid_wide / n8_resid_l
 n10 results are in `results/n10_resid/results.json` and are not published by this script.
 
 ## Things to check on the cluster (not verifiable from outside)
-- `--gres=gpu:1`, `--cpus-per-task=8`, partition/qos/account copied from the older project (`iscrc_qusala`); adapt if the budget differs.
+- `--gres=gpu:1`, `--cpus-per-task=8`, partition/qos/account copied from the older project (`iscrc_manqo-gp`; `iscrc_qusala` expired on 2026-08-25); adapt if the budget differs.
 - `module load python/3.11.7` and a venv with a CUDA torch build (setup_env.sh installs the pip wheel).
 - That compute nodes can call `sbatch` (self-resubmission) and that `--mail-type` is enabled.
