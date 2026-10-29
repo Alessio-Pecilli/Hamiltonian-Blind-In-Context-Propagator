@@ -1,11 +1,14 @@
 """Publish the finished HPC runs to the dashboard. Run on the LOGIN node (needs internet), from the code folder:
-    GH_TOKEN=... python scripts/hpc/publish.py
+    python scripts/hpc/publish.py      # token from ~/.hbicp_gh_token or $GH_TOKEN
 Mirrors the Colab publish cell: n8_resid_wide and n8_resid_long (n8_ref/n8_resid come along for comparison if present)."""
 import os, shutil, subprocess, sys
 
 tok = os.environ.get("GH_TOKEN")
+tf = os.path.expanduser("~/.hbicp_gh_token")  # chmod 600, created once by the user; never committed
+if not tok and os.path.exists(tf):
+    tok = open(tf).read().strip()
 if not tok:
-    sys.exit("set GH_TOKEN (GitHub token with push rights)")
+    sys.exit("no token: put it in ~/.hbicp_gh_token (see README_HPC.md) or set GH_TOKEN")
 run = lambda a, **k: subprocess.run(a, check=True, **k)
 run(["git", "remote", "set-url", "origin", f"https://{tok}@github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
 run(["git", "config", "user.name", "Alessio Pecilli"]); run(["git", "config", "user.email", "alessiopecilli@gmail.com"])

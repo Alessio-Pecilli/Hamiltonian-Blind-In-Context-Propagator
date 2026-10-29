@@ -45,8 +45,10 @@ tail -f logs/hbicp_<jobid>.out runs/n8_resid_wide/train.log
 
 ## Publish (login node, needs internet)
 
+Token (once, typed by you, not echoed, never committed): `umask 077; read -rs T; printf %s "$T" > ~/.hbicp_gh_token; unset T`
+
 ```bash
-GH_TOKEN=<token> python scripts/hpc/publish.py      # n8_resid_wide / n8_resid_long to the dashboard
+python scripts/hpc/publish.py      # n8_resid_wide / n8_resid_long to the dashboard
 ```
 n10 results are in `results/n10_resid/results.json` and are not published by this script.
 
