@@ -19,7 +19,7 @@ cd /leonardo_work/IscrC_QuSALa
 git clone https://github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git hbicp
 cd hbicp/Hamiltonian-Blind-In-Context-Propagator
 bash scripts/hpc/setup_env.sh            # creates the venv, installs requirements (needs internet: login node only)
-export HBICP_VENV=/leonardo_work/IscrC_QuSALa/venv_hbicp
+export HBICP_VENV=/leonardo_work/IscrC_QuSALa/venv_hbicp12
 ```
 
 ## Test the logic first (login node, 2 minutes, no GPU)

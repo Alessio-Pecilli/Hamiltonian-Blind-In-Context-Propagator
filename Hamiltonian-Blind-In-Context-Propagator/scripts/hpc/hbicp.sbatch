@@ -19,7 +19,7 @@
 
 module purge
 module load python/3.11.7
-source "${HBICP_VENV:-/leonardo_work/IscrC_QuSALa/venv_py311}/bin/activate"
+source "${HBICP_VENV:-/leonardo_work/IscrC_QuSALa/venv_hbicp12}/bin/activate"
 export OMP_NUM_THREADS=4 MKL_NUM_THREADS=4
 
 CODE=${HBICP_CODE:-$SLURM_SUBMIT_DIR}
