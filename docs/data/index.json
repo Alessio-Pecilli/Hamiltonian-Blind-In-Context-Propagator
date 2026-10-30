@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261028-170942_n8-residual-orizzonte-variabile-loss-per-k-20k-step.json",
+  "latest": "runs/20261030-081050_n8-residual-modello-grande-d-256-l-6-m-64-20k-step-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261030-081050_n8-residual-modello-grande-d-256-l-6-m-64-20k-step-hpc.json",
+      "label": "n8 residual, modello grande (d=256, L=6, m=64), 20k step (HPC)",
+      "generated_at": "2026-10-30T08:10:50",
+      "git_commit": "534d477efcb3bc49c2f4ee3e0b9388bcec338bc0",
+      "notes": "Residual anchor, modello di dimensione hpc, n=8, 20000 step. Verifica se il limite e la capacita. HL equo ricalcolato dopo la correzione di ehrenfest_system."
+    },
     {
       "file": "runs/20261028-170942_n8-residual-orizzonte-variabile-loss-per-k-20k-step.json",
       "label": "n8 residual + orizzonte variabile + loss per-k, 20k step",
