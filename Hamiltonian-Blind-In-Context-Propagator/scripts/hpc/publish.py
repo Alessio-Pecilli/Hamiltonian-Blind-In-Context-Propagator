@@ -34,3 +34,6 @@ for name, keep, label, notes in jobs:
         "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100"])
     if r.returncode == 0: open(marker, "w").close()
     shutil.rmtree("stage_publish", ignore_errors=True)
+
+# do not leave the token in .git/config
+run(["git", "remote", "set-url", "origin", "https://github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
