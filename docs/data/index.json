@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261030-081050_n8-residual-modello-grande-d-256-l-6-m-64-20k-step-hpc.json",
+  "latest": "runs/20261030-081210_n8-residual-60k-step-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261030-081210_n8-residual-60k-step-hpc.json",
+      "label": "n8 residual, 60k step (HPC)",
+      "generated_at": "2026-10-30T08:12:10",
+      "git_commit": "bb161b4f629f328a4ba2e528081aa15d32ea218b",
+      "notes": "Residual anchor, modello locale, 60000 step invece di 20000. Verifica se il limite e la durata del training."
+    },
     {
       "file": "runs/20261030-081050_n8-residual-modello-grande-d-256-l-6-m-64-20k-step-hpc.json",
       "label": "n8 residual, modello grande (d=256, L=6, m=64), 20k step (HPC)",
