@@ -13,6 +13,7 @@
 #SBATCH --signal=B:USR1@600
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=alessiopecilli@gmail.com
+# STAGES (env, default "A B C") picks the stages, e.g.: sbatch --export=ALL,STAGES=D scripts/hpc/hbicp.sbatch
 # Submit from the code folder (<repo>/Hamiltonian-Blind-In-Context-Propagator):  sbatch scripts/hpc/hbicp.sbatch
 # The pipeline is idempotent. 10 min before the time limit SLURM sends USR1: the pipeline is stopped
 # (at most ckpt_every=500 steps are lost) and the job resubmits itself, up to MAX_CHAIN times.
@@ -34,7 +35,8 @@ PID=$!
 trap 'echo "USR1: time limit close, stopping pipeline"; kill -TERM -- -$PID 2>/dev/null; wait $PID 2>/dev/null; STOPPED=1' USR1
 wait $PID
 
-if [ -f state/ALL_DONE ] || [ -f state/FAILED ]; then
+TAG=$(echo ${STAGES:-A B C} | tr -d " ")
+if [ -f state/done_$TAG ] || [ -f state/failed_$TAG ]; then
   echo "pipeline finished (see state/)"; exit 0
 fi
 if [ "$CHAIN" -lt "$MAX_CHAIN" ]; then

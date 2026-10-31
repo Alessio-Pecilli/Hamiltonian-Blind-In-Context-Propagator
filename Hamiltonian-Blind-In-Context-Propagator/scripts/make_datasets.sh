@@ -21,6 +21,11 @@ case "$WHAT" in
     $G --n 10 --ntraj 500  --L_traj 161 --seed 12 --out datasets/n10/val.h5
     $G --n 10 --ntraj 500  --L_traj 192 --seed 13 --out datasets/n10/test.h5
     ;;
+  n12)  # sizes overridable: N12_TRAIN (default 3000), CPU-heavy (~1 trajectory / 6-8 s with 8 workers)
+    $G --n 12 --ntraj ${N12_TRAIN:-3000} --L_traj 161 --seed 31 --out datasets/n12/train.h5
+    $G --n 12 --ntraj 100 --L_traj 161 --seed 32 --out datasets/n12/val.h5
+    $G --n 12 --ntraj 300 --L_traj 192 --seed 33 --out datasets/n12/test.h5
+    ;;
   transfer)
     $G --n 12 --ntraj 300 --L_traj 192 --seed 21 --out datasets/n12/test.h5
     $G --n 14 --ntraj 300 --L_traj 192 --seed 22 --out datasets/n14/test.h5

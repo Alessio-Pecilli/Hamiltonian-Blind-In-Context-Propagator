@@ -5,6 +5,9 @@
 #   A  n8_resid_wide  residual anchor, d=256 L=6 model, 20k steps   (is it capacity?)
 #   B  n8_resid_long  residual anchor, local model, 60k steps        (is it training length?)
 #   C  n10_resid      residual anchor, hpc model, n=10 qubits        (do the gains appear at larger n?)
+#   D  n10_small      residual anchor, SMALL model, n=10, same data/steps as C   (size vs n)
+#   E  n12_small      residual anchor, SMALL model, n=12 (needs G first)
+#   G  n12 datasets only (CPU, slow)
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -13,13 +16,16 @@ MAIL=${MAIL:-alessiopecilli@gmail.com}
 W=${SLURM_CPUS_PER_TASK:-4}
 STATE=state; mkdir -p "$STATE" runs results logs
 STAGES=${STAGES:-"A B C"}
+TAG=$(echo $STAGES | tr -d " ")   # one done/failed marker per set of stages
+rm -f "$STATE/failed_$TAG"
 RES=(model.residual=true)
+SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -71,11 +77,20 @@ diag() {  # k* on train vs test windows (n=8 only)
   done
 }
 
+gen12() {  # n=12 data (slow on CPU); skipped when already generated
+  if [ "${SMOKE:-0}" = 1 ]; then
+    [ -f datasets/n12/.ok ] && return 0
+    for sp in train:1 val:2 test:3; do python -m data.generate --family tfim --dt 0.1 --workers 2 --n 12 --ntraj 4 --L_traj 193 --seed ${sp#*:} --out datasets/n12/${sp%:*}.h5 || return 1; done
+    touch datasets/n12/.ok
+  else make_data n12 datasets/n12 "$W"; fi
+}
+
 echo "=== pipeline start $(date) stages=$STAGES smoke=${SMOKE:-0} ==="
 python -m pytest -q tests 2>&1 | tail -3
 
 # fair HL baseline (CPU) in the background; independent of the models
 HLPID=""
+case " $STAGES " in *" A "*|*" B "*)
 make_data local datasets/n8 "$W" || { fail "n8 datasets"; exit 1; }
 if [ ! -f results/hl_fair/results.json ]; then
   ( OMP_NUM_THREADS=2 python -m eval.evaluate --data datasets/n8/test.h5 --T $HL_T --horizon 64 \
@@ -83,6 +98,8 @@ if [ ! -f results/hl_fair/results.json ]; then
     && notify "hl_fair finished" || fail "hl_fair" ) &
   HLPID=$!
 fi
+
+esac
 
 for s in $STAGES; do
   case $s in
@@ -93,10 +110,19 @@ for s in $STAGES; do
         [ -f datasets/n10/.ok ] || { for sp in train:1 val:2 test:3; do python -m data.generate --family tfim --dt 0.1 --workers 2 --n 10 --ntraj 4 --L_traj 193 --seed ${sp#*:} --out datasets/n10/${sp%:*}.h5 || fail "n10 smoke data"; done; touch datasets/n10/.ok; }
       else make_data hpc datasets/n10 "$W" || { fail "n10 datasets"; continue; }; fi
       stage n10_resid hpc "$STEPS_C" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" ;;
+    D)
+      if [ "${SMOKE:-0}" = 1 ]; then
+        [ -f datasets/n10/.ok ] || { for sp in train:1 val:2 test:3; do python -m data.generate --family tfim --dt 0.1 --workers 2 --n 10 --ntraj 4 --L_traj 193 --seed ${sp#*:} --out datasets/n10/${sp%:*}.h5 || fail "n10 smoke data"; done; touch datasets/n10/.ok; }
+      else make_data hpc datasets/n10 "$W" || { fail "n10 datasets"; continue; }; fi
+      stage n10_small hpc "$STEPS_D" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}" ;;
+    G) gen12 || fail "n12 datasets" ;;
+    E)
+      gen12 || { fail "n12 datasets"; continue; }
+      stage n12_small hpc "$STEPS_E" datasets/n12/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}"         data.train=datasets/n12/train.h5 data.val=datasets/n12/val.h5 data.test=datasets/n12/test.h5 ;;
   esac
 done
 
 [ -n "$HLPID" ] && wait "$HLPID"
-if [ "$FAILED" = 0 ]; then touch "$STATE/ALL_DONE"; notify "ALL DONE ($STAGES)"; else touch "$STATE/FAILED"; fi
+if [ "$FAILED" = 0 ]; then touch "$STATE/done_$TAG"; notify "ALL DONE ($STAGES)"; else touch "$STATE/failed_$TAG"; fi
 echo "=== pipeline end $(date) failed=$FAILED ==="
 exit $FAILED
