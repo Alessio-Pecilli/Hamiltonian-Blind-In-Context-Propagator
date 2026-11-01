@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261101-102454_n10-modello-piccolo-vs-grande-vs-dmd-hpc.json",
+  "latest": "runs/20261101-103628_n12-modello-piccolo-vs-dmd-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261101-103628_n12-modello-piccolo-vs-dmd-hpc.json",
+      "label": "n12: modello piccolo vs DMD (HPC)",
+      "generated_at": "2026-11-01T10:36:28",
+      "git_commit": "cb329ea6eea20115619bd19e03d89837bf5cf103",
+      "notes": "n=12 qubit, 3000 traiettorie di training, 40000 step, residual anchor, modello piccolo (d=128, L=3, m=32). Confronto con DMD e persistence. n10_small incluso come riferimento."
+    },
     {
       "file": "runs/20261101-102454_n10-modello-piccolo-vs-grande-vs-dmd-hpc.json",
       "label": "n10: modello piccolo vs grande vs DMD (HPC)",
