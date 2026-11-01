@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261030-081210_n8-residual-60k-step-hpc.json",
+  "latest": "runs/20261101-102454_n10-modello-piccolo-vs-grande-vs-dmd-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261101-102454_n10-modello-piccolo-vs-grande-vs-dmd-hpc.json",
+      "label": "n10: modello piccolo vs grande vs DMD (HPC)",
+      "generated_at": "2026-11-01T10:24:54",
+      "git_commit": "4886482678e1931de2582d2854460e12568e6be3",
+      "notes": "n=10 qubit, 8000 hamiltoniane, 40000 step, residual anchor. Modello piccolo (d=128, L=3, m=32, 1.45M param) a confronto con il grande (d=256, L=6, m=64) e con DMD. HL equo (5 traiettorie, T=64) per riferimento."
+    },
     {
       "file": "runs/20261030-081210_n8-residual-60k-step-hpc.json",
       "label": "n8 residual, 60k step (HPC)",
