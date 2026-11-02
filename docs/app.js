@@ -256,7 +256,7 @@ function kstarCfg(ms, keys) {
     label: mLabel(k), _m: k, data: T.map((t) => (ms[k][t] ? ms[k][t].k_star : null)), borderColor: mColor(k), backgroundColor: mColor(k),
     borderDash: mInfo(k).dash ? [5, 4] : [], pointRadius: 4, pointBorderColor: css("--surface"), pointBorderWidth: 2, spanGaps: true })) },
     options: { interaction: hoverIdx, plugins: { tooltip: { callbacks: { footer: footerFor("kstar") } } },
-      scales: { x: axis("contesto T (passi)"), y: axis("k*", { min: 0, max: 30 }) } } };
+      scales: { x: axis("contesto T (passi)"), y: axis("k*", { min: 0, grace: "5%" }) } } };
 }
 function renderChecks(ms, mk_, T, r) {
   const rows = [];
@@ -364,9 +364,17 @@ function renderDiag(ms, keys, T) {
 /* ---------------------------------------------------------------- 02 esempio */
 const CH = ["x", "y", "z"], ECH = { xx: "xx", yz: "yz", zz: "zz" };
 let kind = "node";
-const sampleKeys = () => (D.sample ? methodOrder(D.sample.preds) : []);
+let sampleT = null;  // context length shown in the example plots; null = the exported default
+function sview() {
+  const s = D.sample, v = s && s.by_T && s.by_T[sampleT];
+  return v ? { ...s, T: v.T, H: v.H, preds: v.preds } : s;
+}
+const sampleKeys = () => (D.sample ? methodOrder(sview().preds) : []);
 function renderSampleControls() {
-  const s = D.sample; if (!s) return;
+  const s = sview(); if (!s) return;
+  const Ts = [D.sample.T, ...Object.keys(D.sample.by_T || {}).map(Number)].sort((a, b) => a - b);
+  $("sTseg").innerHTML = Ts.length > 1 ? Ts.map((t) => `<button type="button" data-v="${t}" aria-pressed="${t === s.T}">${t}</button>`).join("") : "";
+  $("sTwrap").hidden = Ts.length < 2;
   const opts = (sel, n, skip) => { const v = sel.value; sel.innerHTML = [...Array(n).keys()].map((i) => `<option value="${i}">${i}</option>`).join(""); sel.value = v && +v < n ? v : (skip ? "1" : "0"); };
   opts($("siteI"), s.n); opts($("siteJ"), s.n, true);
   const cs = kind === "node" ? CH.map((c, i) => [i, `σ${sup(c)}  (${c})`]) : Object.keys(ECH).map((c) => [c, `${c[0]}${c[1]}  (σ${c[0]}ᵢ σ${c[1]}ⱼ)`]);
@@ -379,7 +387,7 @@ function renderSampleControls() {
 const SUB = "₀₁₂₃₄₅₆₇₈₉", sub = (i) => String(i).split("").map((d) => SUB[d]).join("");
 const SUPC = { x: "ˣ", y: "ʸ", z: "ᶻ" }, sup = (c) => SUPC[c];
 function renderSample() {
-  const s = D.sample;
+  const s = sview();
   const ids = ["cTraj", "cSampleFid", "cSampleErr", "cEnergy", "cLam"];
   if (!s) { $("sampleLede").textContent = "Nessuna traiettoria di esempio nei dati caricati (esporta con --data)."; ids.forEach((c) => setEmpty(c, "Nessuna traiettoria di esempio")); ["stTrue", "stPred", "stErr"].forEach((c) => { const cv = $(c); cv.width = 1; cv.height = 1; }); $("lgSample").innerHTML = ""; return; }
   const nE = s.adj.flat().reduce((a, v) => a + v, 0) / 2;
@@ -428,7 +436,7 @@ function renderSample() {
 function hex2rgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 function renderStrips() {
-  const s = D.sample; if (!s) return;
+  const s = sview(); if (!s) return;
   const k = $("stripMethod").value, p = s.preds[k], c = +$("stripChan").value; if (!p) return;
   $("stPredLbl").textContent = `Previsione · ${mLabel(k)}`;
   const n = s.n, T = s.T, K = p.node.length, W = T + 1 + K, cw = 4, rh = 12;
@@ -765,6 +773,7 @@ function segClick(id, fn) {
     $(id).querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); });
 }
 segClick("Tseg", (v) => { evalT = +v; renderEval(); scheduleTypeset(); });
+segClick("sTseg", (v) => { sampleT = String(v); renderSampleControls(); renderSample(); scheduleTypeset(); });
 segClick("NEseg", (v) => { evalNE = v; renderEval(); scheduleTypeset(); });
 segClick("kindSeg", (v) => { kind = v; renderSampleControls(); renderSample(); });
 segClick("traceKind", (v) => { traceKind = v; renderTrace(); });

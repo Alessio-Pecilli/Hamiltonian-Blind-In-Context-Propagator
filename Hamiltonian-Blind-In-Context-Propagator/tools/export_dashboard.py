@@ -161,9 +161,25 @@ def lam_min(node, edge):
     return np.linalg.eigvalsh(rho)[..., 0].min(-1)
 
 
-def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
-    from eval.baselines import BASELINES
+def _pack(preds, tgt_n, tgt_e, attrs, J, h):
     from eval.metrics import fidelity_pairs, rmse_per_traj
+    out_preds = {}
+    for k, (pn, pe) in preds.items():
+        K = pn.shape[0]
+        rn, re = rmse_per_traj(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])
+        fid = fidelity_pairs(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])[0]
+        d = dict(node=_r(pn, 4), rmse_n=_r(rn[0], 5), rmse_e=_r(re[0], 5), fid2=_r(fid, 5),
+                 lam_min=_r(lam_min(pn.astype(np.float64), pe.astype(np.float64)), 5))
+        # edge predictions only for ZZ, XX and YZ channels to keep the file small
+        d["edge_sel"] = {c: _r(pe[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))}
+        if attrs.get("family") in ("tfim", "lr_ising"):
+            d["energy"] = _r(tfim_energy(pn, pe, J, h), 5)
+        out_preds[k] = d
+    return out_preds
+
+
+def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=()):
+    from eval.baselines import BASELINES
     with h5py.File(data, "r") as f:
         attrs = dict(f.attrs)
         node, edge = f["node"][idx], f["edge"][idx]
@@ -210,20 +226,28 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu"):
             preds[bname] = BASELINES[bname](ctx_n, ctx_e, Hk, attrs=attrs, seed=seed, t_abs=T)
         except Exception as ex:  # e.g. hl_oracle on a non-TFIM family
             print(f"  skip {bname}: {ex}")
-    out_preds = {}
-    for k, (pn, pe) in preds.items():
-        K = pn.shape[0]
-        rn, re = rmse_per_traj(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])
-        fid = fidelity_pairs(pn[None], tgt_n[None, :K], pe[None], tgt_e[None, :K])[0]
-        d = dict(node=_r(pn, 4), rmse_n=_r(rn[0], 5), rmse_e=_r(re[0], 5), fid2=_r(fid, 5),
-                 lam_min=_r(lam_min(pn.astype(np.float64), pe.astype(np.float64)), 5))
-        # edge predictions only for ZZ, XX and YZ channels to keep the file small
-        d["edge_sel"] = {c: _r(pe[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))}
-        if attrs.get("family") in ("tfim", "lr_ising"):
-            d["energy"] = _r(tfim_energy(pn, pe, J, h), 5)
-        out_preds[k] = d
-    full_n, full_e = node[: T + 1 + Hk], edge[: T + 1 + Hk]
-    s = dict(dataset=data, index=int(idx), seed=int(seed), n=int(n), dt=float(dt), T=int(T), H=int(Hk),
+    out_preds = _pack(preds, tgt_n, tgt_e, attrs, J, h)
+    by_T = {}  # the same trajectory seen with other context lengths: predictions only, truth is shared
+    for T2 in sample_T:
+        H2 = min(horizon, L - 1 - T2)
+        if T2 == T or H2 < 1:
+            continue
+        p2 = {}
+        if ckpt:
+            b2 = dict(node=torch.tensor(node[None, : T2 + 1 + H2]), edge=torch.tensor(edge[None, : T2 + 1 + H2]))
+            with torch.no_grad():
+                q = model(b2["node"], b2["edge"], torch.tensor([dt], dtype=torch.float32), torch.tensor([[T2]]),
+                          torch.tensor([T2]), horizon=H2 if model.head_type == "A" else min(H2, model.horizon))
+            p2[name] = (q["node"][0, 0].numpy(), q["edge"][0, 0].numpy())
+        for bname in baselines:
+            try:
+                p2[bname] = BASELINES[bname](node[: T2 + 1], edge[: T2 + 1], H2, attrs=attrs, seed=seed, t_abs=T2)
+            except Exception as ex:
+                print(f"  skip {bname} at T={T2}: {ex}")
+        by_T[str(T2)] = dict(T=int(T2), H=int(H2), preds=_pack(p2, node[T2 + 1: T2 + 1 + H2], edge[T2 + 1: T2 + 1 + H2], attrs, J, h))
+    end = max([T + Hk] + [v["T"] + v["H"] for v in by_T.values()])
+    full_n, full_e = node[: end + 1], edge[: end + 1]
+    s = dict(by_T=by_T, dataset=data, index=int(idx), seed=int(seed), n=int(n), dt=float(dt), T=int(T), H=int(Hk),
              family=str(attrs.get("family")), J=_r(J, 4), h=_r(h, 4), adj=np.asarray(adj).astype(int).tolist(),
              node=_r(full_n, 4),
              edge_sel={c: _r(full_e[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))},
@@ -244,6 +268,8 @@ def add_export_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--horizon", type=int, default=64)
     ap.add_argument("--sample", type=int, default=0)
     ap.add_argument("--baselines", nargs="*", default=["persistence", "dmd", "dmd4", "oracle", "hl_oracle"])
+    ap.add_argument("--sample-T", type=int, nargs="*", default=[8, 16, 32, 64, 128],
+                    help="other context lengths for the example trajectory (dashboard T switch)")
 
 
 def build_export(a: argparse.Namespace, notes: str = "") -> dict:
@@ -255,7 +281,7 @@ def build_export(a: argparse.Namespace, notes: str = "") -> dict:
                results=load_results(a.results) if os.path.isdir(a.results) else [],
                datasets=[dataset_info(p) for p in a.data if os.path.exists(p)])
     if a.data and os.path.exists(a.data[0]):
-        out["sample"] = sample_block(a.data[0], a.sample, a.T, a.horizon, a.ckpt, a.baselines)
+        out["sample"] = sample_block(a.data[0], a.sample, a.T, a.horizon, a.ckpt, a.baselines, sample_T=a.sample_T)
     return _clean(out)
 
 
