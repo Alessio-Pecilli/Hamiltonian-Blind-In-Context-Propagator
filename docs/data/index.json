@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261101-103628_n12-modello-piccolo-vs-dmd-hpc.json",
+  "latest": "runs/20261103-151453_n10-perdita-normalizzata-vs-standard-vs-dmd-metriche-relative-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261103-151453_n10-perdita-normalizzata-vs-standard-vs-dmd-metriche-relative-hpc.json",
+      "label": "n10: perdita normalizzata vs standard vs DMD, metriche relative (HPC)",
+      "generated_at": "2026-11-03T15:14:53",
+      "git_commit": "a97d7a6c877e3106dd3a29d97e8cf4d3581f2611",
+      "notes": "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step. Perdita standard contro perdita normalizzata sull'ampiezza del segnale vero (soglia 0.03). Metriche relative: errore diviso per l'ampiezza (k*_rel, soglia 25%) e correlazione previsto-vero, su nodi e correlatori di coppia. La traiettoria di esempio usa il modello con perdita normalizzata."
+    },
     {
       "file": "runs/20261101-103628_n12-modello-piccolo-vs-dmd-hpc.json",
       "label": "n12: modello piccolo vs DMD (HPC)",
