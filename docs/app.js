@@ -118,7 +118,8 @@ const METHOD = {
 const base = (k) => k.split("/").pop();
 const mInfo = (k) => METHOD[base(k)] || { c: "--s8", label: k };
 const mLabel = (k) => (k.includes("/") ? k.split("/")[0] + " · " : "") + mInfo(k).label;
-const mColor = (k) => css(mInfo(k).c);
+const MODEL_C = ["--s1", "--s8", "--s7", "--s10"], modelSeen = [];  // models of different result sets get distinct colours
+const mColor = (k) => css(isModel(k) && k.includes("/") ? MODEL_C[(modelSeen.includes(k) ? modelSeen.indexOf(k) : modelSeen.push(k) - 1) % MODEL_C.length] : mInfo(k).c);
 const isModel = (k) => base(k).startsWith("model");
 const mTerm = (k) => tm(mInfo(k).g || "headA", esc(mLabel(k)));
 
@@ -198,7 +199,9 @@ const curRun = () => runs()[+$("runSel").value || 0];
 function mergedMethods(sel) {
   const out = {}; const sets = D.results || [];
   const use = sel === "all" || sel === undefined ? sets : [sets[+sel]].filter(Boolean);
-  use.forEach((rs) => Object.entries(rs.methods || {}).forEach(([k, v]) => { const key = out[k] ? `${rs.name}/${k}` : k; out[key] = v; }));
+  const cnt = {}; use.forEach((rs) => Object.keys(rs.methods || {}).forEach((k) => { cnt[k] = (cnt[k] || 0) + 1; }));
+  // a model present in several sets is prefixed in all of them (no copy looks like "the" model); baselines: first copy stays bare
+  use.forEach((rs) => Object.entries(rs.methods || {}).forEach(([k, v]) => { out[(isModel(k) && cnt[k] > 1) || out[k] ? `${rs.name}/${k}` : k] = v; }));
   return out;
 }
 const curMethods = () => mergedMethods($("resSel").value);
@@ -250,13 +253,13 @@ function renderOverview() {
   legend("kstarLegendOv", methodLegend(keys));
   if (keys.length) mk("kstarOv", kstarCfg(ms, keys)); else setEmpty("kstarOv", "Nessun risultato nei dati caricati");
 }
-function kstarCfg(ms, keys) {
+function kstarCfg(ms, keys, f = "k_star") {
   const T = Ts(ms);
   return { type: "line", data: { labels: T.map(String), datasets: keys.map((k) => ({
-    label: mLabel(k), _m: k, data: T.map((t) => (ms[k][t] ? ms[k][t].k_star : null)), borderColor: mColor(k), backgroundColor: mColor(k),
+    label: mLabel(k), _m: k, data: T.map((t) => (ms[k][t] && ms[k][t][f] != null ? ms[k][t][f] : null)), borderColor: mColor(k), backgroundColor: mColor(k),
     borderDash: mInfo(k).dash ? [5, 4] : [], pointRadius: 4, pointBorderColor: css("--surface"), pointBorderWidth: 2, spanGaps: true })) },
     options: { interaction: hoverIdx, plugins: { tooltip: { callbacks: { footer: footerFor("kstar") } } },
-      scales: { x: axis("contesto T (passi)"), y: axis("k*", { min: 0, grace: "5%" }) } } };
+      scales: { x: axis("contesto T (passi)"), y: axis(f === "k_star" ? "k*" : "k*_rel", { min: 0, grace: "5%" }) } } };
 }
 function renderChecks(ms, mk_, T, r) {
   const rows = [];
@@ -314,24 +317,39 @@ let evalT = null, evalNE = "rmse_n";
 function renderEval() {
   const ms = curMethods(), keys = methodOrder(ms), T = Ts(ms);
   if (!keys.length) {
-    ["cRmse", "cKstar", "cFid"].forEach((c) => setEmpty(c, "Nessun results.json nei dati caricati"));
+    ["cRmse", "cKstar", "cFid", "cCorr", "cKstarRel"].forEach((c) => setEmpty(c, "Nessun results.json nei dati caricati"));
     $("evalTable").innerHTML = `<tr><td class="muted">Nessun results.json nei dati caricati.</td></tr>`; $("Tseg").innerHTML = ""; $("lgMethods").innerHTML = ""; renderDiag(ms, keys, T); return;
   }
   if (!T.includes(evalT)) evalT = T.includes(32) ? 32 : T[Math.floor(T.length / 2)];
   $("Tseg").innerHTML = T.map((t) => `<button type="button" data-v="${t}" aria-pressed="${t === evalT}">${t}</button>`).join("");
   legend("lgMethods", [...methodLegend(keys), { label: "ε = 0.05", color: css("--ink-3"), dash: true, term: "eps" }]);
-  const rid = evalNE === "rmse_n" ? "rmse_n" : "rmse_e";
-  $("rmseTitle").innerHTML = `${tm(rid, evalNE === "rmse_n" ? "RMSE<sub>n</sub>(k)" : "RMSE<sub>e</sub>(k)")} a ${tm("T", "T")} = ${evalT}`;
-  $("rmseAxisY").innerHTML = tm(rid, evalNE === "rmse_n" ? "RMSE<sub>n</sub>" : "RMSE<sub>e</sub>");
-  const H = Math.max(...keys.map((k) => (ms[k][evalT] ? ms[k][evalT][evalNE].length : 0)));
+  const rel = evalNE.startsWith("rel"), ne = evalNE.slice(-1), eps = rel ? 0.25 : 0.05;
+  const rid = rel ? "rel_rmse" : evalNE, sub = `<sub>${ne}</sub>`;
+  $("rmseTitle").innerHTML = `${tm(rid, rel ? `RMSE${sub}(k) / ampiezza` : `RMSE${sub}(k)`)} a ${tm("T", "T")} = ${evalT}`;
+  $("rmseAxisY").innerHTML = tm(rid, rel ? `RMSE${sub} relativo` : `RMSE${sub}`) + ` · linea tratteggiata: ε = ${eps}`;
+  const has = (k, f) => ms[k][evalT] && ms[k][evalT][f];
+  const H = Math.max(...keys.map((k) => (has(k, evalNE) ? ms[k][evalT][evalNE].length : 0)));
   const floor = 1e-6;
-  const ds = keys.filter((k) => ms[k][evalT]).map((k) => ({ label: mLabel(k), _m: k, data: ms[k][evalT][evalNE].map((v, i) => ({ x: i + 1, y: Math.max(v, floor) })),
+  const ds = keys.filter((k) => has(k, evalNE)).map((k) => ({ label: mLabel(k), _m: k, data: ms[k][evalT][evalNE].map((v, i) => ({ x: i + 1, y: Math.max(v, floor) })),
     borderColor: mColor(k), backgroundColor: mColor(k), borderDash: mInfo(k).dash ? [5, 4] : [] }));
-  ds.push({ label: "ε", data: [{ x: 1, y: 0.05 }, { x: H, y: 0.05 }], borderColor: css("--ink-3"), borderDash: [3, 3], borderWidth: 1 });
+  ds.push({ label: "ε", data: [{ x: 1, y: eps }, { x: H, y: eps }], borderColor: css("--ink-3"), borderDash: [3, 3], borderWidth: 1 });
   mk("cRmse", { type: "line", data: { datasets: ds }, options: { parsing: false, interaction: hoverNear,
     plugins: { tooltip: { filter: (it) => it.dataset.label !== "ε", callbacks: { title: (it) => `k = ${it[0].parsed.x}  (t = ${(it[0].parsed.x * 0.1).toFixed(1)})`, label: (it) => ` ${it.dataset.label}: ${it.parsed.y <= floor ? "≈0" : it.parsed.y.toFixed(4)}`, footer: footerFor(rid) } } },
     scales: { x: axis("passi nel futuro k", { type: "linear", min: 1, max: H }), y: axis("RMSE", { type: "logarithmic", min: floor }) } } });
   mk("cKstar", kstarCfg(ms, keys));
+  // relative metrics: correlation pred-vs-true per k and k*_rel(T), nodes or pairs as in the switch above
+  const cf = `corr_${ne}`, withC = keys.filter((k) => has(k, cf));
+  $("corrTitle").innerHTML = `${tm("corr_k", `Correlazione previsto–vero, ${ne === "n" ? "nodi" : "coppie"}`)} a ${tm("T", "T")} = ${evalT}`;
+  $("kstarRelTitle").innerHTML = `${tm("kstar_rel", `k*<sub>rel</sub>(T), ${ne === "n" ? "nodi" : "coppie"}`)} per metodo`;
+  if (!withC.length) ["cCorr", "cKstarRel"].forEach((c) => setEmpty(c, "Metriche relative non presenti in questo export"));
+  else {
+    const Hc = Math.max(...withC.map((k) => ms[k][evalT][cf].length));
+    mk("cCorr", { type: "line", data: { datasets: withC.map((k) => ({ label: mLabel(k), _m: k, data: ms[k][evalT][cf].map((v, i) => ({ x: i + 1, y: v })),
+      borderColor: mColor(k), backgroundColor: mColor(k), borderDash: mInfo(k).dash ? [5, 4] : [] })) },
+      options: { parsing: false, interaction: hoverNear, plugins: { tooltip: { callbacks: { title: (it) => `k = ${it[0].parsed.x}`, label: (it) => ` ${it.dataset.label}: ${it.parsed.y.toFixed(3)}`, footer: footerFor("corr_k") } } },
+        scales: { x: axis("passi nel futuro k", { type: "linear", min: 1, max: Hc }), y: axis("correlazione", { max: 1 }) } } });
+    mk("cKstarRel", kstarCfg(ms, withC, ne === "n" ? "k_star_rel" : "k_star_rel_e"));
+  }
   // fidelity
   const withF = keys.filter((k) => ms[k][evalT] && ms[k][evalT].fidelity2);
   $("fidTitle").innerHTML = `${tm("fid2", "Fidelity F<sub>2</sub>(k)")} a ${tm("T", "T")} = ${evalT}`;
@@ -348,9 +366,9 @@ function renderEval() {
   const best = {}, bestF = {};
   T.forEach((t) => { best[t] = Math.min(...nonOr.filter((k) => ms[k][t]).map((k) => meanK(ms[k][t].rmse_n)));
     bestF[t] = Math.max(...nonOr.filter((k) => ms[k][t] && ms[k][t].fidelity2).map((k) => meanK(ms[k][t].fidelity2))); });
-  $("evalTable").innerHTML = `<tr><th>metodo</th>${T.map((t) => `<th>T=${t} ${tm("rmse_n", "RMSE<sub>n</sub>")}</th><th>${tm("fidmean", "F̄₂")}</th><th>${tm("kstar", "k*")}</th>`).join("")}<th>${tm("sec_step", "s / passo")} (T=${T[T.length - 1]})</th></tr>` +
-    keys.map((k) => `<tr><td>${mTerm(k)}</td>${T.map((t) => { const r = ms[k][t]; if (!r) return "<td>–</td><td>–</td><td>–</td>"; const v = meanK(r.rmse_n), f = r.fidelity2 ? meanK(r.fidelity2) : null;
-      return `<td class="mono ${base(k) !== "oracle" && v === best[t] ? "best" : ""}">${fmt(v, 4)}</td><td class="mono ${f != null && base(k) !== "oracle" && f === bestF[t] ? "best" : ""}">${f == null ? "–" : fmt(f, 3)}</td><td class="mono">${r.k_star}</td>`; }).join("")}<td class="mono">${fmt((ms[k][T[T.length - 1]] || {}).sec_per_step)}</td></tr>`).join("");
+  $("evalTable").innerHTML = `<tr><th>metodo</th>${T.map((t) => `<th>T=${t} ${tm("rmse_n", "RMSE<sub>n</sub>")}</th><th>${tm("fidmean", "F̄₂")}</th><th>${tm("kstar", "k*")}</th><th>${tm("kstar_rel", "k*<sub>rel</sub>")} n/e</th>`).join("")}<th>${tm("sec_step", "s / passo")} (T=${T[T.length - 1]})</th></tr>` +
+    keys.map((k) => `<tr><td>${mTerm(k)}</td>${T.map((t) => { const r = ms[k][t]; if (!r) return "<td>–</td><td>–</td><td>–</td><td>–</td>"; const v = meanK(r.rmse_n), f = r.fidelity2 ? meanK(r.fidelity2) : null;
+      return `<td class="mono ${base(k) !== "oracle" && v === best[t] ? "best" : ""}">${fmt(v, 4)}</td><td class="mono ${f != null && base(k) !== "oracle" && f === bestF[t] ? "best" : ""}">${f == null ? "–" : fmt(f, 3)}</td><td class="mono">${r.k_star}</td><td class="mono">${r.k_star_rel ?? "–"} / ${r.k_star_rel_e ?? "–"}</td>`; }).join("")}<td class="mono">${fmt((ms[k][T[T.length - 1]] || {}).sec_per_step)}</td></tr>`).join("");
   renderDiag(ms, keys, T);
 }
 function renderDiag(ms, keys, T) {

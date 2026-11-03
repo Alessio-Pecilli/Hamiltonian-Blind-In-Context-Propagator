@@ -69,7 +69,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <div class="seg" id="Tseg" role="group" aria-label="Lunghezza del contesto"></div>
     <span class="label muted">Osservabili</span>
     <div class="seg" id="NEseg" role="group" aria-label="Nodi o coppie">
-      <button type="button" data-v="rmse_n" aria-pressed="true">nodi</button><button type="button" data-v="rmse_e" aria-pressed="false">coppie</button>
+      <button type="button" data-v="rmse_n" aria-pressed="true">nodi</button><button type="button" data-v="rmse_e" aria-pressed="false">coppie</button><button type="button" data-v="rel_rmse_n" aria-pressed="false">nodi relativo</button><button type="button" data-v="rel_rmse_e" aria-pressed="false">coppie relativo</button>
     </div>
   </div>
   <div class="legend" id="lgMethods"></div>
@@ -77,14 +77,28 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <div class="panel">
       <div class="ph"><h3 id="rmseTitle"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub>(k)</span></h3><span class="cap">media sulle traiettorie di test</span></div>
       <div class="chart tall"><canvas id="cRmse"></canvas></div>
-      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span id="rmseAxisY"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span></span> (scala log) · linea tratteggiata: <span class="term" data-term="eps" tabindex="0">ε = 0.05</span></div>
-      <p class="how"><b>Come leggerlo.</b> Ogni curva è l'errore medio a k passi dall'ultimo passo di contesto. Una curva bassa e piatta è una buona previsione; la curva sale quando la previsione si allontana dalla verità. Conta dove ogni curva attraversa la linea tratteggiata ε. Gli errori delle coppie sono tipicamente più alti di quelli dei nodi.</p>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span id="rmseAxisY"><span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span></span> (scala log)</div>
+      <p class="how"><b>Come leggerlo.</b> Ogni curva è l'errore medio a k passi dall'ultimo passo di contesto. Una curva bassa e piatta è una buona previsione; la curva sale quando la previsione si allontana dalla verità. Conta dove ogni curva attraversa la linea tratteggiata ε. Gli errori delle coppie sono tipicamente più alti di quelli dei nodi. Con «relativo» l'errore è diviso per l'ampiezza media del segnale vero a quel k (soglia 25%): conta per i correlatori, che sono piccoli.</p>
     </div>
     <div class="panel">
       <div class="ph"><h3><span class="term" data-term="kstar" tabindex="0">\(k^\star(T)\)</span> per metodo</h3><span class="cap">asse T in scala log₂</span></div>
       <div class="chart tall"><canvas id="cKstar"></canvas></div>
       <div class="axes">x: <span class="term" data-term="T" tabindex="0">contesto T</span> · y: <span class="term" data-term="kstar" tabindex="0">k*</span></div>
       <p class="how"><b>Come leggerlo.</b> Confronta quanti passi riesce a prevedere ogni metodo a parità di contesto. Il confronto significativo è con le baseline <span class="term" data-term="dmd1" tabindex="0">DMD</span> e <span class="term" data-term="hl" tabindex="0">HL</span>; l'<span class="term" data-term="oracle" tabindex="0">oracolo</span> è il tetto.</p>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="panel">
+      <div class="ph"><h3 id="corrTitle"><span class="term" data-term="corr_k" tabindex="0">Correlazione previsto–vero</span></h3><span class="cap">segue il selettore nodi / coppie</span></div>
+      <div class="chart tall"><canvas id="cCorr"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="k" tabindex="0">passi nel futuro k</span> · y: <span class="term" data-term="corr_k" tabindex="0">correlazione di Pearson</span></div>
+      <p class="how"><b>Come leggerlo.</b> Misura se la previsione ha la forma giusta (fase e oscillazioni), indipendentemente dalla scala: 1 = forma identica alla verità, 0 = scorrelata. Un metodo che prevede valori piccoli ma sbagliati ha RMSE basso e correlazione bassa.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 id="kstarRelTitle"><span class="term" data-term="kstar_rel" tabindex="0">k*<sub>rel</sub>(T)</span></h3><span class="cap">soglia: errore relativo ≤ 25%</span></div>
+      <div class="chart tall"><canvas id="cKstarRel"></canvas></div>
+      <div class="axes">x: <span class="term" data-term="T" tabindex="0">contesto T</span> · y: <span class="term" data-term="kstar_rel" tabindex="0">k*<sub>rel</sub></span></div>
+      <p class="how"><b>Come leggerlo.</b> Come k*, ma con l'errore misurato rispetto all'ampiezza del segnale invece che in valore assoluto. Un valore 0 significa che già al primo passo l'errore supera il 25% del segnale.</p>
     </div>
   </div>
   <div class="grid g2">
@@ -97,7 +111,7 @@ window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\
     <div class="panel">
       <div class="ph"><h3>Tabella riassuntiva</h3><span class="cap">in grassetto il migliore escluso l'oracolo · medie su k = 1..16</span></div>
       <div class="tablewrap"><table id="evalTable"></table></div>
-      <p class="how"><b>Come leggerla.</b> Per ogni contesto <span class="term" data-term="T" tabindex="0">T</span>: <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span> medio, <span class="term" data-term="fidmean" tabindex="0">F̄₂</span> medio e <span class="term" data-term="kstar" tabindex="0">k*</span>. Errore più basso e fidelity più alta sono meglio. L'ultima colonna è il costo in <span class="term" data-term="sec_step" tabindex="0">secondi per passo</span>.</p>
+      <p class="how"><b>Come leggerla.</b> Per ogni contesto <span class="term" data-term="T" tabindex="0">T</span>: <span class="term" data-term="rmse_n" tabindex="0">RMSE<sub>n</sub></span> medio, <span class="term" data-term="fidmean" tabindex="0">F̄₂</span> medio, <span class="term" data-term="kstar" tabindex="0">k*</span> e <span class="term" data-term="kstar_rel" tabindex="0">k*<sub>rel</sub></span> su nodi / coppie. Errore più basso e fidelity più alta sono meglio. L'ultima colonna è il costo in <span class="term" data-term="sec_step" tabindex="0">secondi per passo</span>.</p>
     </div>
   </div>
   <p class="cap"><span class="term" data-term="oracle" tabindex="0">Oracolo</span> = propagazione esatta con \(H\) vera e <span class="term" data-term="psi" tabindex="0">\(|\psi_T\rangle\)</span> vero (limite superiore). <span class="term" data-term="hl" tabindex="0">HL + oracolo</span> = \(J, h\) stimati dal contesto (Eq. 29) e lasso, poi propagazione esatta dallo stato vero. <span class="term" data-term="dmd1" tabindex="0">DMD</span> = mappa lineare ridge appresa sul contesto, w = 1 o 4 (<span class="term" data-term="dmd4" tabindex="0">w = 4</span>). <span class="term" data-term="persistence" tabindex="0">Persistenza</span> = ultimo osservato ripetuto.</p>
