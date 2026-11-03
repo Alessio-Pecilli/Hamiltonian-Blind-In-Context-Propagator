@@ -8,6 +8,8 @@
 #   D  n10_small      residual anchor, SMALL model, n=10, same data/steps as C   (size vs n)
 #   E  n12_small      residual anchor, SMALL model, n=12 (needs G first)
 #   G  n12 datasets only (CPU, slow)
+#   R  n10_small_rel  re-evaluation of n10_small (no training) with the relative metrics
+#   F  n10_small_norm as D, with the amplitude-normalised loss (loss.amp_norm=true)
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -22,10 +24,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -67,6 +69,22 @@ stage() {  # stage <name> <preset> <steps> <test.h5> "<T list>" "<baselines>" [o
   python -m eval.evaluate --ckpt "$d/last.pt" --data "$test" --T $Ts --horizon 64 --baselines $bl "${EV[@]}" --out "$res" 2>&1 | tee -a "$d/eval.log"
   [ "${PIPESTATUS[0]}" -eq 0 ] || { fail "$name eval"; return 1; }
   notify "$name finished ($steps steps)"
+}
+
+reeval() {  # reeval <run> <out> <test.h5> "<T list>" "<baselines>": eval only, of a finished run
+  local res=results/$2
+  if [ -f "$res/results.json" ]; then echo "[$2] already done, skip"; return 0; fi
+  [ -f "runs/$1/last.pt" ] || { fail "$2: runs/$1/last.pt missing"; return 1; }
+  echo "[$2] $(date) eval of runs/$1"
+  python -m eval.evaluate --ckpt "runs/$1/last.pt" --data "$3" --T $4 --horizon 64 --baselines $5 "${EV[@]}" --out "$res" 2>&1 | tee -a "runs/$1/eval_rel.log"
+  [ "${PIPESTATUS[0]}" -eq 0 ] || { fail "$2 eval"; return 1; }
+  notify "$2 finished"
+}
+
+n10data() {
+  if [ "${SMOKE:-0}" = 1 ]; then
+    [ -f datasets/n10/.ok ] || { for sp in train:1 val:2 test:3; do python -m data.generate --family tfim --dt 0.1 --workers 2 --n 10 --ntraj 4 --L_traj 193 --seed ${sp#*:} --out datasets/n10/${sp%:*}.h5 || return 1; done; touch datasets/n10/.ok; }
+  else make_data hpc datasets/n10 "$W"; fi
 }
 
 diag() {  # k* on train vs test windows (n=8 only)
@@ -116,6 +134,12 @@ for s in $STAGES; do
       else make_data hpc datasets/n10 "$W" || { fail "n10 datasets"; continue; }; fi
       stage n10_small hpc "$STEPS_D" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}" ;;
     G) gen12 || fail "n12 datasets" ;;
+    R)
+      n10data || { fail "n10 datasets"; continue; }
+      reeval n10_small n10_small_rel datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" ;;
+    F)
+      n10data || { fail "n10 datasets"; continue; }
+      stage n10_small_norm hpc "$STEPS_F" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}" loss.amp_norm=true ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
       stage n12_small hpc "$STEPS_E" datasets/n12/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}"         data.train=datasets/n12/train.h5 data.val=datasets/n12/val.h5 data.test=datasets/n12/test.h5 ;;

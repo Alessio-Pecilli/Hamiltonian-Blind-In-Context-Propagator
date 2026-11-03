@@ -16,7 +16,7 @@ import scipy.sparse.linalg as spla
 
 from data import physics
 from data.generate import simulate
-from eval.metrics import fidelity_pairs, k_star, rmse_per_traj
+from eval.metrics import RelMetrics, fidelity_pairs, k_star, rmse_per_traj
 
 SWAP9 = np.array([3 * b + a for a in range(3) for b in range(3)])
 
@@ -191,6 +191,7 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
             if Hk < 1:
                 continue
             rn, re, fd, t_tot = [], [], [], 0.0
+            rel = RelMetrics()
             for k in range(N):
                 ctx_n, ctx_e = node_all[k, t0: t0 + T + 1], edge_all[k, t0: t0 + T + 1]
                 tgt_n, tgt_e = node_all[k, t0 + T + 1: t0 + T + 1 + Hk], edge_all[k, t0 + T + 1: t0 + T + 1 + Hk]
@@ -200,10 +201,12 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
                 a, b = rmse_per_traj(pn[None], tgt_n[None], pe[None], tgt_e[None])
                 rn.append(a[0]); re.append(b[0])
                 fd.append(fidelity_pairs(pn[None], tgt_n[None], pe[None], tgt_e[None])[0])
+                rel.add(pn[None], tgt_n[None], pe[None], tgt_e[None])
             cn, ce = np.mean(rn, 0), np.mean(re, 0)
             out[name][T] = dict(T=T, H=Hk, ntraj=N, rmse_n=cn.tolist(), rmse_e=ce.tolist(),
-                                fidelity2=np.mean(fd, 0).tolist(), k_star=k_star(cn), sec_per_step=t_tot / (N * Hk))
+                                fidelity2=np.mean(fd, 0).tolist(), k_star=k_star(cn), sec_per_step=t_tot / (N * Hk),
+                                **rel.result(cn, ce))
             if verbose:
                 print(f"  {name:12s} T={T:4d}  rmse_n(1)={cn[0]:.4f}  rmse_n(H)={cn[-1]:.4f}  "
-                      f"k*={out[name][T]['k_star']}", flush=True)
+                      f"k*={out[name][T]['k_star']}  k*_rel={out[name][T]['k_star_rel']}", flush=True)
     return out

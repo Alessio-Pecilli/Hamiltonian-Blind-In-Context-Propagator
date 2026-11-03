@@ -40,12 +40,16 @@ def _sq_err(pn, pe, tn, te):
     return ln + le
 
 
-def pred_loss(pn, pe, tn, te, w_k=None, anchor=None):
+def pred_loss(pn, pe, tn, te, w_k=None, anchor=None, amp_floor=None):
     """pn/tn (..., H, n, 3), pe/te (..., H, n, n, 9). Averaged over anchors and k (Eq. 27).
     anchor = (node0 (B, A, n, 3), edge0 (B, A, n, n, 9)): per-k normalisation, each k divided by the
-    batch persistence error at that k (detached), so no horizon dominates."""
+    batch persistence error at that k (detached), so no horizon dominates.
+    amp_floor: relative loss, each (window, k) divided by the power of the true signal there
+    (floored at amp_floor^2), so late windows with small observables weigh as much as early ones."""
     l = _sq_err(pn, pe, tn, te)                                            # (B, A, H)
-    if anchor is not None:
+    if amp_floor is not None:
+        l = l / _sq_err(torch.zeros_like(tn), torch.zeros_like(te), tn, te).clamp_min(amp_floor ** 2)
+    elif anchor is not None:
         p = _sq_err(anchor[0][..., None, :, :], anchor[1][..., None, :, :, :], tn, te)
         l = l / (p.detach().mean((0, 1)) + 1e-6)
     elif w_k is not None:
@@ -90,7 +94,8 @@ def total_loss(pred: dict, batch: dict, tn, te, cfg: dict):
     H = tn.shape[2]
     w = k_weights(H, lc.get("w_k", "uniform"), tn.device)  # (H,)
     anchor = (pred["node0"], pred["edge0"]) if lc.get("per_k_norm", False) else None
-    l_pred = pred_loss(pred["node"], pred["edge"], tn, te, w, anchor)
+    amp = lc.get("amp_floor", 0.03) if lc.get("amp_norm", False) else None
+    l_pred = pred_loss(pred["node"], pred["edge"], tn, te, w, anchor, amp)
     l_phys = phys_loss(pred["node"], pred["edge"]) if lc["lambda_phys"] > 0 else tn.new_zeros(())
     if "probe" in pred and lc["lambda_probe"] > 0:  # never a target of the body: only for the old runs
         l_probe, probe_logs = probe_loss(pred["probe"], batch)

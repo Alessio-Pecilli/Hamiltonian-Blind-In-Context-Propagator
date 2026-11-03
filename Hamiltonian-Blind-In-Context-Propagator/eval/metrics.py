@@ -11,6 +11,7 @@ import torch
 from data.dataset import gather_targets, make_loader
 
 EPS_KSTAR = 0.05
+EPS_REL = 0.25  # relative k*: error below 25% of the true signal amplitude at that step
 
 
 # ----------------------------------------------------------------------------------------
@@ -23,6 +24,48 @@ def rmse_per_traj(pn, tn, pe, te):
     mask = ~np.eye(n, dtype=bool)
     re = (((pe - te) ** 2)[..., mask, :]).mean(axis=(-1, -2)) ** 0.5
     return rn, re
+
+
+class RelMetrics:
+    """Streaming relative metrics per horizon step k, nodes and pairs separately: RMSE divided by
+    the RMS of the true signal (both averaged over trajectories), and the Pearson correlation of
+    predicted vs true values over all trajectories and entries. Scale-free: the observables shrink
+    as the state spreads, so a fixed absolute threshold favours late windows."""
+
+    def __init__(self):
+        self.s = {}
+
+    @staticmethod
+    def _flat(pn, tn, pe, te):
+        n = pn.shape[-2]
+        mask = ~np.eye(n, dtype=bool)
+        N, H = pn.shape[:2]
+        return dict(n=(pn.reshape(N, H, -1), tn.reshape(N, H, -1)),
+                    e=(pe[:, :, mask].reshape(N, H, -1), te[:, :, mask].reshape(N, H, -1)))
+
+    def add(self, pn, tn, pe, te):
+        for key, (p, t) in self._flat(pn, tn, pe, te).items():
+            p, t = p.astype(np.float64), t.astype(np.float64)
+            acc = dict(amp=(t ** 2).mean(-1) ** 0.5, x=p, y=t, xx=p * p, yy=t * t, xy=p * t)
+            acc = {k: v.sum(axis=0) if k == "amp" else v.sum(axis=(0, 2)) for k, v in acc.items()}
+            acc["c"] = np.full(p.shape[1], p.shape[0] * p.shape[2], dtype=np.float64)
+            acc["N"] = p.shape[0]
+            old = self.s.get(key)
+            self.s[key] = acc if old is None else {k: old[k] + v for k, v in acc.items()}
+
+    def result(self, rmse_n, rmse_e) -> dict:
+        out = {}
+        for key, rmse in (("n", rmse_n), ("e", rmse_e)):
+            a = self.s[key]
+            amp = a["amp"] / a["N"]
+            c = a["c"]
+            cov = a["xy"] - a["x"] * a["y"] / c
+            var = (a["xx"] - a["x"] ** 2 / c) * (a["yy"] - a["y"] ** 2 / c)
+            out[f"amp_{key}"] = amp.tolist()
+            out[f"rel_rmse_{key}"] = (np.asarray(rmse) / np.maximum(amp, 1e-12)).tolist()
+            out[f"corr_{key}"] = (cov / np.sqrt(np.maximum(var, 1e-30))).tolist()
+        out["k_star_rel"] = k_star(out["rel_rmse_n"], EPS_REL)
+        return out
 
 
 _P16 = None
@@ -142,6 +185,7 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
         loader = make_loader(path, (T, T), Hk, 1, batch_size, shuffle=False, permute=False,
                              fixed_T=T, fixed_t0=t0, num_workers=num_workers)
         rn_all, re_all, fid_all, gate, attn, adj, J, h = [], [], [], [], [], [], [], []
+        rel = RelMetrics()
         pJ, ph, padj, S_F, Gn = [], [], [], [], []
         n_steps, t_model = 0, 0.0
         for bi, batch in enumerate(loader):
@@ -164,6 +208,8 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             re_all.append(re)
             fid_all.append(fidelity_pairs(pred["node"][:, 0].cpu().numpy(), tn[:, 0].cpu().numpy(),
                                           pred["edge"][:, 0].cpu().numpy(), te[:, 0].cpu().numpy()))
+            rel.add(pred["node"][:, 0].cpu().numpy(), tn[:, 0].cpu().numpy(),
+                    pred["edge"][:, 0].cpu().numpy(), te[:, 0].cpu().numpy())
             adj.append(batch["adj"].cpu().numpy())
             J.append(batch["J"].cpu().numpy())
             h.append(batch["h"].cpu().numpy())
@@ -185,7 +231,8 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
         curve_n, curve_e = rn.mean(0), re.mean(0)
         res = dict(T=T, H=Hk, ntraj=len(rn), rmse_n=curve_n.tolist(), rmse_e=curve_e.tolist(),
                    fidelity2=np.concatenate(fid_all).mean(0).tolist(),
-                   k_star=k_star(curve_n), sec_per_step=t_model / max(n_steps, 1))
+                   k_star=k_star(curve_n), sec_per_step=t_model / max(n_steps, 1),
+                   **rel.result(curve_n, curve_e))
         adj_u, J_u = upper_pairs(adj), upper_pairs(J)
         if gate:
             res["auroc_gate"] = auroc(upper_pairs(np.concatenate(gate)), adj_u)
