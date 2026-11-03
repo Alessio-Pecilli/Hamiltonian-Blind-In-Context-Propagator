@@ -65,6 +65,7 @@ class RelMetrics:
             out[f"rel_rmse_{key}"] = (np.asarray(rmse) / np.maximum(amp, 1e-12)).tolist()
             out[f"corr_{key}"] = (cov / np.sqrt(np.maximum(var, 1e-30))).tolist()
         out["k_star_rel"] = k_star(out["rel_rmse_n"], EPS_REL)
+        out["k_star_rel_e"] = k_star(out["rel_rmse_e"], EPS_REL)  # correlators: the hard, informative part
         return out
 
 

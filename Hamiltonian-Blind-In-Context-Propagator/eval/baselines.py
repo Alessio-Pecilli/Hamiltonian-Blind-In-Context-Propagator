@@ -208,5 +208,5 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
                                 **rel.result(cn, ce))
             if verbose:
                 print(f"  {name:12s} T={T:4d}  rmse_n(1)={cn[0]:.4f}  rmse_n(H)={cn[-1]:.4f}  "
-                      f"k*={out[name][T]['k_star']}  k*_rel={out[name][T]['k_star_rel']}", flush=True)
+                      f"k*={out[name][T]['k_star']}  k*_rel={out[name][T]['k_star_rel']}/{out[name][T]['k_star_rel_e']}", flush=True)
     return out

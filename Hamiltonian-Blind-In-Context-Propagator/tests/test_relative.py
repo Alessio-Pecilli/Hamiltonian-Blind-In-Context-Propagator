@@ -20,7 +20,7 @@ def test_rel_metrics_perfect_zero_and_scaled():
         re = ((pe - te) ** 2)[..., mask, :].mean((-1, -2)) ** 0.5
         r = m.result(rn.mean(0), re.mean(0))
         if rel == 0.0:
-            assert np.allclose(r["rel_rmse_n"], 0) and r["k_star_rel"] == 5
+            assert np.allclose(r["rel_rmse_n"], 0) and r["k_star_rel"] == r["k_star_rel_e"] == 5
         else:
             assert np.allclose(r["rel_rmse_n"], 1, rtol=1e-9) and r["k_star_rel"] == 0
         if corr is not None:
