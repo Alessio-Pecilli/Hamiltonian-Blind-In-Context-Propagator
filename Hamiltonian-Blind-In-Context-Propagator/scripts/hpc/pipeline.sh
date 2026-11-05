@@ -146,11 +146,11 @@ for s in $STAGES; do
       stage n10_small_norm hpc "$STEPS_F" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}" loss.amp_norm=true ;;
     V)
       n10data || { fail "n10 datasets"; continue; }
-      stage n10_small_varh hpc "$STEPS_V" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.var_horizon=true train.H=64 train.H_min=8 ;;
+      stage n10_small_varh hpc "$STEPS_V" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.var_horizon=true train.H=64 train.H_min=8 train.T_max=96 ;;  # train trajectories are 161 long: T_max + 64 must fit
     S)
       n10data || { fail "n10 datasets"; continue; }
       EVX=(--block 32); reeval n10_small n10_small_blk32 datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle"
-      EVX=(--block 16); stage n10_small_roll hpc "$STEPS_S" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4
+      EVX=(--block 16); stage n10_small_roll hpc "$STEPS_S" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4 train.T_max=96
       EVX=() ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
