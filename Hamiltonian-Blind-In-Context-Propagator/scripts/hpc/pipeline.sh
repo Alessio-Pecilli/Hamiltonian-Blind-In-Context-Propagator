@@ -10,6 +10,9 @@
 #   G  n12 datasets only (CPU, slow)
 #   R  n10_small_rel  re-evaluation of n10_small (no training) with the relative metrics
 #   F  n10_small_norm as D, with the amplitude-normalised loss (loss.amp_norm=true)
+#   V  n10_small_varh as D, trained on 64 future steps with the horizon sampled in [8, 64]
+#   S  n10_small_roll as D, roll out of 4 blocks of 16 steps with scheduled sampling, evaluated the same way;
+#      plus n10_small_blk32: the plain model of D evaluated as a roll out of 2 blocks of 32 (no retraining)
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -24,10 +27,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -36,6 +39,7 @@ notify() {
   if [ -n "$MAIL" ] && command -v mail >/dev/null 2>&1; then echo "$*" | mail -s "HBICP: $*" "$MAIL" 2>/dev/null || true; fi
 }
 FAILED=0
+EVX=()  # extra eval arguments of the next stage (e.g. --block)
 fail() { echo "[FAIL] $*"; notify "FAIL $*"; FAILED=1; }
 
 cur_step() {  # step stored in <dir>/last.pt; a corrupt checkpoint is set aside and counts as 0
@@ -66,7 +70,7 @@ stage() {  # stage <name> <preset> <steps> <test.h5> "<T list>" "<baselines>" [o
   s=$(cur_step "$d")
   [ "$s" -ge "$steps" ] || { fail "$name stopped at step $s < $steps"; return 1; }
   echo "[$name] $(date) eval"
-  python -m eval.evaluate --ckpt "$d/last.pt" --data "$test" --T $Ts --horizon 64 --baselines $bl "${EV[@]}" --out "$res" 2>&1 | tee -a "$d/eval.log"
+  python -m eval.evaluate --ckpt "$d/last.pt" --data "$test" --T $Ts --horizon 64 --baselines $bl "${EV[@]}" "${EVX[@]}" --out "$res" 2>&1 | tee -a "$d/eval.log"
   [ "${PIPESTATUS[0]}" -eq 0 ] || { fail "$name eval"; return 1; }
   notify "$name finished ($steps steps)"
 }
@@ -76,7 +80,7 @@ reeval() {  # reeval <run> <out> <test.h5> "<T list>" "<baselines>": eval only, 
   if [ -f "$res/results.json" ]; then echo "[$2] already done, skip"; return 0; fi
   [ -f "runs/$1/last.pt" ] || { fail "$2: runs/$1/last.pt missing"; return 1; }
   echo "[$2] $(date) eval of runs/$1"
-  python -m eval.evaluate --ckpt "runs/$1/last.pt" --data "$3" --T $4 --horizon 64 --baselines $5 "${EV[@]}" --out "$res" 2>&1 | tee -a "runs/$1/eval_rel.log"
+  python -m eval.evaluate --ckpt "runs/$1/last.pt" --data "$3" --T $4 --horizon 64 --baselines $5 "${EV[@]}" "${EVX[@]}" --out "$res" 2>&1 | tee -a "runs/$1/eval_rel.log"
   [ "${PIPESTATUS[0]}" -eq 0 ] || { fail "$2 eval"; return 1; }
   notify "$2 finished"
 }
@@ -140,6 +144,14 @@ for s in $STAGES; do
     F)
       n10data || { fail "n10 datasets"; continue; }
       stage n10_small_norm hpc "$STEPS_F" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}" loss.amp_norm=true ;;
+    V)
+      n10data || { fail "n10 datasets"; continue; }
+      stage n10_small_varh hpc "$STEPS_V" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.var_horizon=true train.H=64 train.H_min=8 ;;
+    S)
+      n10data || { fail "n10 datasets"; continue; }
+      EVX=(--block 32); reeval n10_small n10_small_blk32 datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle"
+      EVX=(--block 16); stage n10_small_roll hpc "$STEPS_S" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4
+      EVX=() ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
       stage n12_small hpc "$STEPS_E" datasets/n12/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}"         data.train=datasets/n12/train.h5 data.val=datasets/n12/val.h5 data.test=datasets/n12/test.h5 ;;

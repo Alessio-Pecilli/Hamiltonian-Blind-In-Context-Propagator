@@ -85,5 +85,28 @@ class Propagator(nn.Module):
         return pred
 
 
+def block_rollout(model, node, edge, dt, anchors, T, horizon: int, block: int, p_pred: float = 1.0,
+                  return_attn: bool = False):
+    """Predict `horizon` steps in blocks of `block`: after each block its frames are written into the
+    context and the next block is predicted from T + block. Per example, the written frames are the
+    model's own (detached) predictions with probability p_pred, else the true ones (scheduled sampling;
+    p_pred = 1 is the free roll out used at test time). node/edge must hold the true frames up to T + horizon.
+    Yields (pred, anchors) per block; anchors[:, 0] must be T (true for the dataset windows)."""
+    node, edge, T = node.clone(), edge.clone(), T.clone()
+    B = T.shape[0]
+    bidx = torch.arange(B, device=T.device)[:, None]
+    for r0 in range(0, horizon, block):
+        hb = min(block, horizon - r0)
+        pred = model(node, edge, dt, anchors, T, hb, return_attn=return_attn and r0 == 0)
+        yield pred, anchors
+        idx = T[:, None] + torch.arange(1, hb + 1, device=T.device)       # (B, hb)
+        own = torch.rand(B, device=T.device) < p_pred
+        for x, p in ((node, pred["node"]), (edge, pred["edge"])):
+            m = own.view(B, *([1] * (p.dim() - 2)))
+            x[bidx, idx] = torch.where(m, p[:, 0].detach().to(x.dtype), x[bidx, idx])
+        T = T + hb
+        anchors = T[:, None]
+
+
 def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

@@ -63,6 +63,7 @@ def main():
                     help="any of persistence dmd dmd4 oracle hl_oracle hl_fair_o0 hl_fair_fit")
     ap.add_argument("--max_traj", type=int, default=None)
     ap.add_argument("--batch_size", type=int, default=16)
+    ap.add_argument("--block", type=int, default=None, help="roll out in blocks of this many steps (predictions fed back)")
     ap.add_argument("--out", default="results")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
@@ -72,7 +73,7 @@ def main():
     if a.ckpt:
         model, ck = load_model(a.ckpt, device)
         mb = None if a.max_traj is None else -(-a.max_traj // a.batch_size)
-        res = evaluate_model(model, a.data, a.T, a.horizon, device, a.batch_size, max_batches=mb)
+        res = evaluate_model(model, a.data, a.T, a.horizon, device, a.batch_size, max_batches=mb, block=a.block)
         results[f"model({model.head_type})"] = res
         for T, r in res.items():
             print(f"  model        T={T:4d}  rmse_n(1)={r['rmse_n'][0]:.4f}  rmse_n(H)={r['rmse_n'][-1]:.4f}  "

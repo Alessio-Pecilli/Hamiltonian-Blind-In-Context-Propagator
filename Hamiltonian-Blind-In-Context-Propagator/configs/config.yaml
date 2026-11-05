@@ -44,6 +44,9 @@ common:
     min_anchor: 8
     var_horizon: false     # sample the horizon uniformly in [H_min, H] at every step
     H_min: 4
+    rollout_blocks: 0      # > 0: predict R blocks of H steps, feeding each block back as context (scheduled sampling)
+    rollout_p_max: 1.0     # final probability of feeding back the model's own block instead of the true one
+    rollout_ramp: 0.5      # fraction of the steps over which that probability grows linearly from 0
     eval_every: 1000
     eval_T: [8, 16, 32, 64]  # context lengths used for quick validation
     eval_batches: 10

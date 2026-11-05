@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from data.dataset import gather_targets, make_loader
+from model.propagator import block_rollout
 
 EPS_KSTAR = 0.05
 EPS_REL = 0.25  # relative k*: error below 25% of the true signal amplitude at that step
@@ -170,9 +171,10 @@ def upper_pairs(x: np.ndarray) -> np.ndarray:
 @torch.no_grad()
 def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: int = 16,
                    max_batches: int | None = None, t0: int = 0, graph: bool = True,
-                   num_workers: int = 0) -> dict:
+                   num_workers: int = 0, block: int | None = None) -> dict:
     """Evaluate from the last context position, sweeping T. horizon may exceed the training H
-    for Head A (generator extrapolation); it is clipped to what the stored trajectories allow."""
+    for Head A (generator extrapolation); it is clipped to what the stored trajectories allow.
+    block: roll out in blocks of this many steps, feeding the predictions back as context."""
     model.eval()
     results = {}
     for T in T_list:
@@ -197,8 +199,14 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t_start = time.perf_counter()
-            pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"],
-                         horizon=Hk, return_attn=graph)
+            if block:
+                parts = [p for p, _ in block_rollout(model, batch["node"], batch["edge"], batch["dt"], batch["anchors"],
+                                                     batch["T"], Hk, block, return_attn=graph)]
+                pred = dict(parts[0], node=torch.cat([p["node"] for p in parts], 2),
+                            edge=torch.cat([p["edge"] for p in parts], 2))
+            else:
+                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"],
+                             horizon=Hk, return_attn=graph)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t_model += time.perf_counter() - t_start

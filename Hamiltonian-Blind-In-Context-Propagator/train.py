@@ -21,7 +21,7 @@ from config import git_commit, load_config
 from data.dataset import gather_targets, make_loader
 from eval.metrics import evaluate_model
 from losses import total_loss
-from model.propagator import Propagator, count_parameters
+from model.propagator import Propagator, block_rollout, count_parameters
 
 
 def lr_at(step: int, oc: dict, total: int) -> float:
@@ -108,7 +108,8 @@ def main():
         ck = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(ck["model"]); opt.load_state_dict(ck["opt"]); step = ck["step"]
 
-    loader = make_loader(dc["train"], (tc["T_min"], tc["T_max"]), tc["H"], tc["anchors"],
+    R = tc.get("rollout_blocks", 0)  # > 0: roll out R blocks of H steps with scheduled sampling
+    loader = make_loader(dc["train"], (tc["T_min"], tc["T_max"]), tc["H"] * max(R, 1), tc["anchors"],
                          tc["batch_size"], shuffle=True, num_workers=dc.get("num_workers", 0),
                          preload=dc.get("preload", True), min_anchor=tc.get("min_anchor", 8))
     logger = Logger(out_dir)
@@ -123,12 +124,25 @@ def main():
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             for g in opt.param_groups:
                 g["lr"] = lr_at(step, oc, total)
-            H = random.randint(tc.get("H_min", tc["H"]), tc["H"]) if tc.get("var_horizon") else tc["H"]
-            tn, te = gather_targets(batch, H)
-            pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H)
-            loss, logs = total_loss(pred, batch, tn, te, cfg)
             opt.zero_grad(set_to_none=True)
-            loss.backward()
+            if R:
+                # probability of feeding back the model's own block, ramped from 0 to rollout_p_max
+                p = tc.get("rollout_p_max", 1.0) * min(1.0, step / max(1, tc.get("rollout_ramp", 0.5) * total))
+                acc = {}
+                for pred, anc in block_rollout(model, batch["node"], batch["edge"], batch["dt"], batch["anchors"],
+                                               batch["T"], tc["H"] * R, tc["H"], p):
+                    tn, te = gather_targets(dict(node=batch["node"], edge=batch["edge"], anchors=anc), tc["H"])
+                    loss, logs = total_loss(pred, batch, tn, te, cfg)
+                    (loss / R).backward()  # fed-back frames are detached: one graph per block
+                    for k, v in logs.items():
+                        acc[k] = acc.get(k, 0.0) + v / R
+                logs = dict(acc, p_pred=p)
+            else:
+                H = random.randint(tc.get("H_min", tc["H"]), tc["H"]) if tc.get("var_horizon") else tc["H"]
+                tn, te = gather_targets(batch, H)
+                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H)
+                loss, logs = total_loss(pred, batch, tn, te, cfg)
+                loss.backward()
             gn = torch.nn.utils.clip_grad_norm_(model.parameters(), oc["grad_clip"])
             opt.step()
             step += 1
@@ -144,8 +158,9 @@ def main():
                 print(f"overfit check PASSED at step {step}: L_pred = {logs['pred']:.2e}")
                 return
             if not args.overfit and dc.get("val") and step % tc["eval_every"] == 0:
-                res = evaluate_model(model, dc["val"], tc["eval_T"], tc["H"], device,
-                                     batch_size=tc["batch_size"], max_batches=tc["eval_batches"])
+                res = evaluate_model(model, dc["val"], tc["eval_T"], tc["H"] * max(R, 1), device,
+                                     batch_size=tc["batch_size"], max_batches=tc["eval_batches"],
+                                     block=tc["H"] if R else None)
                 s = summarize_eval(res)
                 logger.log(step, s, "val")
                 print("  val: " + "  ".join(f"{k}={v:.3g}" for k, v in s.items()), flush=True)
