@@ -26,9 +26,15 @@ jobs = [("n8_resid_wide", ["n8_ref", "n8_resid", "n8_resid_wide", "hl_fair"], "n
         # (src, shown name, model only): the two result sets get readable names, baselines appear once
         ("n10_small_norm", [("n10_small", "n10_small_rel", "perdita standard", False), ("n10_small_norm", "n10_small_norm", "perdita normalizzata", True)],
          "n10: perdita normalizzata vs standard vs DMD, metriche relative (HPC)",
-         "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step. Perdita standard contro perdita normalizzata sull'ampiezza del segnale vero (soglia 0.03). Metriche relative: errore diviso per l'ampiezza (k*_rel, soglia 25%) e correlazione previsto-vero, su nodi e correlatori di coppia. La traiettoria di esempio usa il modello con perdita normalizzata.")]
+         "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step. Perdita standard contro perdita normalizzata sull'ampiezza del segnale vero (soglia 0.03). Metriche relative: errore diviso per l'ampiezza (k*_rel, soglia 25%) e correlazione previsto-vero, su nodi e correlatori di coppia. La traiettoria di esempio usa il modello con perdita normalizzata."),
+        ("n10_small_roll", [("n10_small", "n10_small_rel", "previsione in un colpo solo", False),
+                            ("n10_small", "n10_small_blk32", "a blocchi da 32, senza nuovo training", True),
+                            ("n10_small_varh", "n10_small_varh", "orizzonte variabile fino a 64", True),
+                            ("n10_small_roll", "n10_small_roll", "roll out alternato, blocchi da 16", True)],
+         "n10: roll out a blocchi e orizzonte variabile (HPC)",
+         "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step, perdita standard. (1) modello di riferimento, previsione dei 64 passi in un colpo solo; (2) lo stesso modello valutato a blocchi da 32 passi rimessi nel contesto; (3) training con orizzonte estratto a caso tra 8 e 64 passi; (4) training a blocchi da 16 passi (4 blocchi) con scheduled sampling: il blocco rimesso nel contesto e' la previsione del modello con probabilita' crescente da 0 a 1 nella prima meta' del training; valutato a blocchi. (3) e (4) con contesto di training fino a 96 invece di 128 (le traiettorie di training sono lunghe 161). La traiettoria di esempio usa il modello (4), a blocchi.")]
 extra = {"n8_resid_wide": N8, "n8_resid_long": N8, "n10_small": dict(BIG, data="datasets/n10/test.h5"), "n12_small": dict(BIG, data="datasets/n12/test.h5"),
-         "n10_small_norm": dict(BIG, data="datasets/n10/test.h5")}
+         "n10_small_norm": dict(BIG, data="datasets/n10/test.h5"), "n10_small_roll": dict(BIG, data="datasets/n10/test.h5", block=16)}
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"
     if os.path.exists(marker): print(name, "gia pubblicato"); continue
@@ -47,7 +53,7 @@ for name, keep, label, notes in jobs:
     run(["git", "pull", "--rebase", "-q"])
     r = subprocess.run([sys.executable, "-m", "tools.publish_dashboard", "--label", label, "--notes", notes, "--runs", "stage_publish/runs",
         "--results", "stage_publish/results", "--data", extra[name]["data"], "--ckpt", f"runs/{name}/last.pt", "--baselines", *extra[name]["base"],
-        "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100"])
+        "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100", *(["--block", str(extra[name]["block"])] if "block" in extra[name] else [])])
     if r.returncode == 0: open(marker, "w").close()
     shutil.rmtree("stage_publish", ignore_errors=True)
 

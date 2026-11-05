@@ -178,7 +178,20 @@ def _pack(preds, tgt_n, tgt_e, attrs, J, h):
     return out_preds
 
 
-def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=()):
+def _predict(model, node, edge, dt, T, H, block=None, return_attn=False):
+    """Model rollout of one trajectory from context end T: one shot, or in blocks fed back as context."""
+    import torch
+    from model.propagator import block_rollout
+    a = (torch.tensor(node[None, : T + 1 + H]), torch.tensor(edge[None, : T + 1 + H]),
+         torch.tensor([dt], dtype=torch.float32), torch.tensor([[T]]), torch.tensor([T]))
+    with torch.no_grad():
+        if not block:
+            return model(*a, horizon=H, return_attn=return_attn)
+        parts = [p for p, _ in block_rollout(model, *a, H, block, return_attn=return_attn)]
+    return dict(parts[0], node=torch.cat([p["node"] for p in parts], 2), edge=torch.cat([p["edge"] for p in parts], 2))
+
+
+def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=(), block=None):
     from eval.baselines import BASELINES
     with h5py.File(data, "r") as f:
         attrs = dict(f.attrs)
@@ -195,13 +208,7 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=
         from eval.evaluate import load_model
         model, ck = load_model(ckpt, torch.device(device))
         H_model = Hk if model.head_type == "A" else min(Hk, model.horizon)
-        b = dict(node=torch.tensor(node[None, : T + 1 + H_model]),
-                 edge=torch.tensor(edge[None, : T + 1 + H_model]),
-                 dt=torch.tensor([dt], dtype=torch.float32), anchors=torch.tensor([[T]]),
-                 T=torch.tensor([T]))
-        with torch.no_grad():
-            p = model(b["node"], b["edge"], b["dt"], b["anchors"], b["T"], horizon=H_model,
-                      return_attn=True)
+        p = _predict(model, node, edge, dt, T, H_model, block, return_attn=True)
         name = f"model({model.head_type})"
         preds[name] = (p["node"][0, 0].numpy(), p["edge"][0, 0].numpy())
         if "probe" in p:
@@ -234,10 +241,7 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=
             continue
         p2 = {}
         if ckpt:
-            b2 = dict(node=torch.tensor(node[None, : T2 + 1 + H2]), edge=torch.tensor(edge[None, : T2 + 1 + H2]))
-            with torch.no_grad():
-                q = model(b2["node"], b2["edge"], torch.tensor([dt], dtype=torch.float32), torch.tensor([[T2]]),
-                          torch.tensor([T2]), horizon=H2 if model.head_type == "A" else min(H2, model.horizon))
+            q = _predict(model, node, edge, dt, T2, H2 if model.head_type == "A" else min(H2, model.horizon), block)
             p2[name] = (q["node"][0, 0].numpy(), q["edge"][0, 0].numpy())
         for bname in baselines:
             try:
@@ -270,6 +274,7 @@ def add_export_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--baselines", nargs="*", default=["persistence", "dmd", "dmd4", "oracle", "hl_oracle"])
     ap.add_argument("--sample-T", type=int, nargs="*", default=[8, 16, 32, 64, 128],
                     help="other context lengths for the example trajectory (dashboard T switch)")
+    ap.add_argument("--block", type=int, default=None, help="example rollout of the model in blocks fed back as context")
 
 
 def build_export(a: argparse.Namespace, notes: str = "") -> dict:
@@ -281,7 +286,7 @@ def build_export(a: argparse.Namespace, notes: str = "") -> dict:
                results=load_results(a.results) if os.path.isdir(a.results) else [],
                datasets=[dataset_info(p) for p in a.data if os.path.exists(p)])
     if a.data and os.path.exists(a.data[0]):
-        out["sample"] = sample_block(a.data[0], a.sample, a.T, a.horizon, a.ckpt, a.baselines, sample_T=a.sample_T)
+        out["sample"] = sample_block(a.data[0], a.sample, a.T, a.horizon, a.ckpt, a.baselines, sample_T=a.sample_T, block=a.block)
     return _clean(out)
 
 
