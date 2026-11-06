@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261103-151453_n10-perdita-normalizzata-vs-standard-vs-dmd-metriche-relative-hpc.json",
+  "latest": "runs/20261106-173532_n10-roll-out-a-blocchi-e-orizzonte-variabile-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261106-173532_n10-roll-out-a-blocchi-e-orizzonte-variabile-hpc.json",
+      "label": "n10: roll out a blocchi e orizzonte variabile (HPC)",
+      "generated_at": "2026-11-06T17:35:32",
+      "git_commit": "f0c13734081f0d7880188d37711afd5876289242",
+      "notes": "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step, perdita standard. (1) modello di riferimento, previsione dei 64 passi in un colpo solo; (2) lo stesso modello valutato a blocchi da 32 passi rimessi nel contesto; (3) training con orizzonte estratto a caso tra 8 e 64 passi; (4) training a blocchi da 16 passi (4 blocchi) con scheduled sampling: il blocco rimesso nel contesto e' la previsione del modello con probabilita' crescente da 0 a 1 nella prima meta' del training; valutato a blocchi. (3) e (4) con contesto di training fino a 96 invece di 128 (le traiettorie di training sono lunghe 161). La traiettoria di esempio usa il modello (4), a blocchi."
+    },
     {
       "file": "runs/20261103-151453_n10-perdita-normalizzata-vs-standard-vs-dmd-metriche-relative-hpc.json",
       "label": "n10: perdita normalizzata vs standard vs DMD, metriche relative (HPC)",
