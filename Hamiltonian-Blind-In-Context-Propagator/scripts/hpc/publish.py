@@ -32,9 +32,19 @@ jobs = [("n8_resid_wide", ["n8_ref", "n8_resid", "n8_resid_wide", "hl_fair"], "n
                             ("n10_small_varh", "n10_small_varh", "orizzonte variabile fino a 64", True),
                             ("n10_small_roll", "n10_small_roll", "roll out alternato, blocchi da 16", True)],
          "n10: roll out a blocchi e orizzonte variabile (HPC)",
-         "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step, perdita standard. (1) modello di riferimento, previsione dei 64 passi in un colpo solo; (2) lo stesso modello valutato a blocchi da 32 passi rimessi nel contesto; (3) training con orizzonte estratto a caso tra 8 e 64 passi; (4) training a blocchi da 16 passi (4 blocchi) con scheduled sampling: il blocco rimesso nel contesto e' la previsione del modello con probabilita' crescente da 0 a 1 nella prima meta' del training; valutato a blocchi. (3) e (4) con contesto di training fino a 96 invece di 128 (le traiettorie di training sono lunghe 161). La traiettoria di esempio usa il modello (4), a blocchi.")]
+         "n=10 qubit, modello piccolo (d=128, L=3, m=32), 40000 step, perdita standard. (1) modello di riferimento, previsione dei 64 passi in un colpo solo; (2) lo stesso modello valutato a blocchi da 32 passi rimessi nel contesto; (3) training con orizzonte estratto a caso tra 8 e 64 passi; (4) training a blocchi da 16 passi (4 blocchi) con scheduled sampling: il blocco rimesso nel contesto e' la previsione del modello con probabilita' crescente da 0 a 1 nella prima meta' del training; valutato a blocchi. (3) e (4) con contesto di training fino a 96 invece di 128 (le traiettorie di training sono lunghe 161). La traiettoria di esempio usa il modello (4), a blocchi."),
+        ("n10_sets_roll", [("n10_sets_roll", "n10_sets_roll", "64 hamiltoniane, test su hamiltoniane nuove", False),
+                           ("n10_small_roll", "n10_small_roll_on_sets", "8000 hamiltoniane, stesso test", True)],
+         "n10: training su 64 hamiltoniane fisse, test su hamiltoniane nuove (HPC)",
+         "n=10 qubit, modello piccolo, roll out a blocchi da 16 (come la voce precedente), 40000 step. Training su 64 hamiltoniane fisse (grafo, J, h), 125 stati iniziali ciascuna; test su 20 hamiltoniane mai viste, 25 stati ciascuna. Confronto con lo stesso modello addestrato su 8000 hamiltoniane diverse (una traiettoria ciascuna). Baseline: DMD stimato sul contesto (dmd) e libreria di 64 operatori DMD, uno per hamiltoniana di training, combinati con pesi stimati sul contesto (dmd_lib)."),
+        ("n10_sets_roll_seen", [("n10_sets_roll", "n10_sets_roll_seen", "64 hamiltoniane, test su hamiltoniane viste", False)],
+         "n10: training su 64 hamiltoniane fisse, test sulle stesse con stati nuovi (HPC)",
+         "Come la voce precedente, ma il test usa le 64 hamiltoniane del training con stati iniziali nuovi (8 per hamiltoniana): misura quanto si perde passando a parametri mai visti.")]
 extra = {"n8_resid_wide": N8, "n8_resid_long": N8, "n10_small": dict(BIG, data="datasets/n10/test.h5"), "n12_small": dict(BIG, data="datasets/n12/test.h5"),
-         "n10_small_norm": dict(BIG, data="datasets/n10/test.h5"), "n10_small_roll": dict(BIG, data="datasets/n10/test.h5", block=16)}
+         "n10_small_norm": dict(BIG, data="datasets/n10/test.h5"), "n10_small_roll": dict(BIG, data="datasets/n10/test.h5", block=16),
+         "n10_sets_roll": dict(base=["persistence", "dmd", "dmd_lib"], data="datasets/n10sets/test.h5", block=16),
+         "n10_sets_roll_seen": dict(base=["persistence", "dmd", "dmd_lib"], data="datasets/n10sets/test_seen.h5", block=16, ckpt="runs/n10_sets_roll/last.pt")}
+os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"
     if os.path.exists(marker): print(name, "gia pubblicato"); continue
@@ -52,7 +62,7 @@ for name, keep, label, notes in jobs:
         json.dump(res, open(f"stage_publish/results/{show}/results.json", "w"))
     run(["git", "pull", "--rebase", "-q"])
     r = subprocess.run([sys.executable, "-m", "tools.publish_dashboard", "--label", label, "--notes", notes, "--runs", "stage_publish/runs",
-        "--results", "stage_publish/results", "--data", extra[name]["data"], "--ckpt", f"runs/{name}/last.pt", "--baselines", *extra[name]["base"],
+        "--results", "stage_publish/results", "--data", extra[name]["data"], "--ckpt", extra[name].get("ckpt", f"runs/{name}/last.pt"), "--baselines", *extra[name]["base"],
         "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100", *(["--block", str(extra[name]["block"])] if "block" in extra[name] else [])])
     if r.returncode == 0: open(marker, "w").close()
     shutil.rmtree("stage_publish", ignore_errors=True)
