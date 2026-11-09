@@ -7,6 +7,7 @@ and return predictions node (H, n, 3), edge (H, n, n, 9) for steps T+1..T+H.
 """
 from __future__ import annotations
 
+import os
 import time
 
 import h5py
@@ -160,17 +161,71 @@ def hl_oracle(node, edge, H, attrs=None, seed=None, t_abs=None, **_):
     return pn.astype(np.float32), pe.astype(np.float32)
 
 
+# ----------------------------------------------------------------------------------------
+# 5. library of DMDs: one operator per training parameter set, mixed with weights fitted on the context
+# ----------------------------------------------------------------------------------------
+def fit_dmd_lib(train_path: str, out: str, lam: float = 1e-6) -> None:
+    """For every parameter set i of a training file made with --n_sets: one ridge DMD operator W_i
+    (o_{t+1} = o_t @ W_i) fitted on all the trajectories of that set pooled together."""
+    with h5py.File(train_path, "r") as f:
+        sid = f["set_id"][()]
+        Ws = []
+        for i in range(sid.max() + 1):
+            idx = np.nonzero(sid == i)[0]
+            o = flatten_obs(f["node"][idx], f["edge"][idx]).astype(np.float64)   # (m, L, M)
+            X, Y = o[:, :-1].reshape(-1, o.shape[-1]), o[:, 1:].reshape(-1, o.shape[-1])
+            G = X.T @ X
+            Ws.append(np.linalg.solve(G + lam * np.trace(G) / len(G) * np.eye(len(G)), X.T @ Y))
+    np.save(out, np.stack(Ws).astype(np.float32))
+
+
+_LIB = {}
+
+
+def dmd_lib(node, edge, H, lam: float = 1e-6, **_):
+    """o_{t+1} = o_t @ sum_i c_i W_i, with the weights c fitted by ridge on the context (one-step error).
+    Library path from $HBICP_DMD_LIB (an .npy written by fit_dmd_lib on the training file).
+    shortcut: path via env var so evaluate.py and the dashboard export need no new argument."""
+    path = os.environ["HBICP_DMD_LIB"]
+    if path not in _LIB:
+        _LIB[path] = np.load(path).astype(np.float64)
+    Wl = _LIB[path]                                             # (P, M, M)
+    n = node.shape[1]
+    o = flatten_obs(node, edge).astype(np.float64)              # (T+1, M)
+    F = np.einsum("tm,pmk->ptk", o[:-1], Wl).reshape(len(Wl), -1)   # (P, T*M) one-step predictions per operator
+    G = F @ F.T
+    c = np.linalg.solve(G + lam * np.trace(G) / len(G) * np.eye(len(G)), F @ o[1:].ravel())
+    W = np.tensordot(c, Wl, 1)
+    x, preds = o[-1], []
+    for _ in range(H):
+        x = x @ W
+        preds.append(x)
+    pn, pe = unflatten_obs(np.stack(preds), n)
+    return pn.astype(np.float32), pe.astype(np.float32)
+
+
 from eval.hl_fair import hl_fair_fit, hl_fair_o0  # noqa: E402
 
 BASELINES = dict(
     persistence=persistence,
     dmd=lambda *a, **k: ridge_dmd(*a, w=1, **k),
     dmd4=lambda *a, **k: ridge_dmd(*a, w=4, **k),
+    dmd_lib=dmd_lib,
     oracle=oracle,
     hl_oracle=hl_oracle,
     hl_fair_o0=hl_fair_o0,
     hl_fair_fit=hl_fair_fit,
 )
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="fit the DMD library: python -m eval.baselines --train X.h5 --out lib.npy")
+    ap.add_argument("--train", required=True)
+    ap.add_argument("--out", required=True)
+    a = ap.parse_args()
+    fit_dmd_lib(a.train, a.out)
+    print(f"wrote {a.out}")
 
 
 def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=True) -> dict:
@@ -210,3 +265,7 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
                 print(f"  {name:12s} T={T:4d}  rmse_n(1)={cn[0]:.4f}  rmse_n(H)={cn[-1]:.4f}  "
                       f"k*={out[name][T]['k_star']}  k*_rel={out[name][T]['k_star_rel']}/{out[name][T]['k_star_rel_e']}", flush=True)
     return out
+
+
+if __name__ == "__main__":
+    main()

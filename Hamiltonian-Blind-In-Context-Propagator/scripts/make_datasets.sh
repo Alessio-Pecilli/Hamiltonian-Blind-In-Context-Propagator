@@ -21,6 +21,12 @@ case "$WHAT" in
     $G --n 10 --ntraj 500  --L_traj 161 --seed 12 --out datasets/n10/val.h5
     $G --n 10 --ntraj 500  --L_traj 192 --seed 13 --out datasets/n10/test.h5
     ;;
+  sets)  # n=10, 64 fixed Hamiltonians x 125 initial states; test on 20 new Hamiltonians and on the 64 seen ones (new states)
+    $G --n 10 --ntraj 8000 --L_traj 161 --seed 41 --n_sets 64 --set_seed 41 --out datasets/n10sets/train.h5
+    $G --n 10 --ntraj 500  --L_traj 161 --seed 42 --n_sets 20 --set_seed 42 --out datasets/n10sets/val.h5
+    $G --n 10 --ntraj 500  --L_traj 192 --seed 43 --n_sets 20 --set_seed 43 --out datasets/n10sets/test.h5
+    $G --n 10 --ntraj 512  --L_traj 192 --seed 44 --n_sets 64 --set_seed 41 --out datasets/n10sets/test_seen.h5
+    ;;
   n12)  # sizes overridable: N12_TRAIN (default 3000), CPU-heavy (~1 trajectory / 6-8 s with 8 workers)
     $G --n 12 --ntraj ${N12_TRAIN:-3000} --L_traj 161 --seed 31 --out datasets/n12/train.h5
     $G --n 12 --ntraj 100 --L_traj 161 --seed 32 --out datasets/n12/val.h5

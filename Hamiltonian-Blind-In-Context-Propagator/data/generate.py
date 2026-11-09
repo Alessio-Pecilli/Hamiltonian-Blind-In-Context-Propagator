@@ -111,10 +111,12 @@ class Trajectory:
 
 
 def simulate(n: int, L: int, dt: float, family: str, seed: int, keep_state: bool = False,
-             check: bool = True) -> Trajectory:
-    """Deterministic in `seed`: regenerates the same trajectory bit-for-bit."""
+             check: bool = True, sys_seed: int | None = None) -> Trajectory:
+    """Deterministic in `seed`: regenerates the same trajectory bit-for-bit.
+    sys_seed: draw the Hamiltonian from its own seed (shared by all trajectories of a parameter set)."""
     rng = np.random.default_rng(int(seed))
-    terms, J, h, adj = sample_system(n, family, rng)
+    rng_sys = rng if sys_seed is None else np.random.default_rng(int(sys_seed))
+    terms, J, h, adj = sample_system(n, family, rng_sys)
     psi0 = physics.random_product_state(n, rng)
     H = physics.build_hamiltonian(n, terms)
     Psi = physics.evolve(H, psi0, dt, L)
@@ -138,22 +140,26 @@ def traj_seed(base_seed: int, idx: int) -> int:
 
 
 def _worker(args):
-    n, L, dt, family, seed = args
-    return simulate(n, L, dt, family, seed)
+    n, L, dt, family, seed, sys_seed = args
+    return simulate(n, L, dt, family, seed, sys_seed=sys_seed)
 
 
 # ----------------------------------------------------------------------------------------
 # Dataset file
 # ----------------------------------------------------------------------------------------
 def generate_file(out: str, n: int, ntraj: int, L: int, dt: float, family: str, seed: int,
-                  workers: int = 1, verbose: bool = True) -> None:
+                  workers: int = 1, verbose: bool = True, n_sets: int = 0, set_seed: int = 0) -> None:
+    """n_sets > 0: trajectory k uses parameter set k % n_sets (Hamiltonian from traj_seed(set_seed, set),
+    new random initial state each time); same set_seed and n_sets = same Hamiltonians."""
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     seeds = [traj_seed(seed, k) for k in range(ntraj)]
-    jobs = [(n, L, dt, family, s) for s in seeds]
+    sets = [k % n_sets if n_sets else -1 for k in range(ntraj)]
+    jobs = [(n, L, dt, family, s, traj_seed(set_seed, i) if n_sets else None) for s, i in zip(seeds, sets)]
     t0 = time.time()
     with h5py.File(out, "w") as f:
         f.attrs.update(dict(n=n, L_traj=L, dt=dt, family=family, base_seed=seed, ntraj=ntraj,
-                            spec="propagator_spec v0.1"))
+                            n_sets=n_sets, set_seed=set_seed, spec="propagator_spec v0.1"))
+        f.create_dataset("set_id", data=np.array(sets, "i4"))
         dn = f.create_dataset("node", (ntraj, L, n, 3), "f4", chunks=(1, L, n, 3))
         de = f.create_dataset("edge", (ntraj, L, n, n, 9), "f4", chunks=(1, L, n, n, 9))
         ddt = f.create_dataset("dt", (ntraj,), "f4")
@@ -187,8 +193,10 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
     p.add_argument("--workers", type=int, default=1)
+    p.add_argument("--n_sets", type=int, default=0, help="> 0: that many fixed Hamiltonians, many initial states each")
+    p.add_argument("--set_seed", type=int, default=0, help="seed of the parameter sets (reuse it for a seen-parameters test)")
     a = p.parse_args()
-    generate_file(a.out, a.n, a.ntraj, a.L_traj, a.dt, a.family, a.seed, a.workers)
+    generate_file(a.out, a.n, a.ntraj, a.L_traj, a.dt, a.family, a.seed, a.workers, n_sets=a.n_sets, set_seed=a.set_seed)
 
 
 if __name__ == "__main__":

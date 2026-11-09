@@ -13,6 +13,9 @@
 #   V  n10_small_varh as D, trained on 64 future steps with the horizon sampled in [8, 64]
 #   S  n10_small_roll as D, roll out of 4 blocks of 16 steps with scheduled sampling, evaluated the same way;
 #      plus n10_small_blk32: the plain model of D evaluated as a roll out of 2 blocks of 32 (no retraining)
+#   P  n10_sets_roll  as S, but trained on 64 fixed Hamiltonians (125 initial states each) and tested on 20 new
+#      ones (and on the 64 seen ones with new states); baselines: in-context DMD and a library of the 64 per-set
+#      DMD operators mixed with weights fitted on the context. Plus n10_small_roll (8000 Hamiltonians) on the same test.
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -27,10 +30,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -151,6 +154,18 @@ for s in $STAGES; do
       n10data || { fail "n10 datasets"; continue; }
       EVX=(--block 32); reeval n10_small n10_small_blk32 datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle"
       EVX=(--block 16); stage n10_small_roll hpc "$STEPS_S" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4 oracle" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4 train.T_max=96
+      EVX=() ;;
+    P)
+      if [ "${SMOKE:-0}" = 1 ]; then
+        [ -f datasets/n10sets/.ok ] || { for sp in train:161:1:4 val:161:2:2 test:192:3:2 test_seen:192:4:4; do IFS=: read f L s k <<< "$sp"
+          python -m data.generate --dt 0.1 --n 10 --ntraj 8 --L_traj $L --seed $s --n_sets $k --set_seed $([ $f = test_seen ] && echo 1 || echo $s) --out datasets/n10sets/$f.h5; done; touch datasets/n10sets/.ok; } || { fail "sets smoke data"; continue; }
+      else make_data sets datasets/n10sets "$W" || { fail "n10sets datasets"; continue; }; fi
+      [ -f datasets/n10sets/dmd_lib.npy ] || python -m eval.baselines --train datasets/n10sets/train.h5 --out datasets/n10sets/dmd_lib.npy || { fail "dmd lib"; continue; }
+      export HBICP_DMD_LIB=$PWD/datasets/n10sets/dmd_lib.npy
+      D10S=(data.train=datasets/n10sets/train.h5 data.val=datasets/n10sets/val.h5 data.test=datasets/n10sets/test.h5)
+      EVX=(--block 16)
+      stage n10_sets_roll hpc "$STEPS_P" datasets/n10sets/test.h5 "8 16 32 64 128" "persistence dmd dmd_lib" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4 train.T_max=96 "${D10S[@]}"         && reeval n10_sets_roll n10_sets_roll_seen datasets/n10sets/test_seen.h5 "8 16 32 64 128" "persistence dmd dmd_lib"
+      [ -f runs/n10_small_roll/last.pt ] && reeval n10_small_roll n10_small_roll_on_sets datasets/n10sets/test.h5 "8 16 32 64 128" ""
       EVX=() ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
