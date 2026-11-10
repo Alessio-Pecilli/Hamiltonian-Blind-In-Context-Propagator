@@ -8,6 +8,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --time=01:00:00
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=alessiopecilli@gmail.com
 # Builds and commits the dashboard exports (no internet here); then on the login node: python scripts/hpc/publish.py
 module purge
 module load python/3.11.7
