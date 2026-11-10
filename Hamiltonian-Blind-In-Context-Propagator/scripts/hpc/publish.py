@@ -1,17 +1,21 @@
 """Publish the finished HPC runs to the dashboard. Run on the LOGIN node (needs internet), from the code folder:
     python scripts/hpc/publish.py      # token from ~/.hbicp_gh_token or $GH_TOKEN
 Mirrors the Colab publish cell: n8_resid_wide and n8_resid_long (n8_ref/n8_resid come along for comparison if present),
-then n10_small and n12_small (no oracle baselines there, so the sample rollout uses persistence/dmd/dmd4 only)."""
+then n10_small and n12_small (no oracle baselines there, so the sample rollout uses persistence/dmd/dmd4 only).
+OFFLINE=1 (inside a job, scripts/hpc/publish.sbatch: compute nodes have no internet and the login node a 600 s CPU limit):
+build and commit the exports only; then run this script again on the login node to push them."""
 import json, os, shutil, subprocess, sys
+
+OFFLINE = os.environ.get("OFFLINE") == "1"
 
 tok = os.environ.get("GH_TOKEN")
 tf = os.path.expanduser("~/.hbicp_gh_token")  # chmod 600, created once by the user; never committed
 if not tok and os.path.exists(tf):
     tok = open(tf).read().strip()
-if not tok:
+if not tok and not OFFLINE:
     sys.exit("no token: put it in ~/.hbicp_gh_token (see README_HPC.md) or set GH_TOKEN")
 run = lambda a, **k: subprocess.run(a, check=True, **k)
-run(["git", "remote", "set-url", "origin", f"https://{tok}@github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
+if not OFFLINE: run(["git", "remote", "set-url", "origin", f"https://{tok}@github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
 run(["git", "config", "user.name", "Alessio Pecilli"]); run(["git", "config", "user.email", "alessiopecilli@gmail.com"])
 N8 = dict(data="datasets/n8/test.h5", base=["persistence", "dmd", "dmd4", "oracle", "hl_oracle"])
 BIG = dict(base=["persistence", "dmd", "dmd4"])
@@ -60,12 +64,15 @@ for name, keep, label, notes in jobs:
         res = json.load(open(f"results/{res_k}/results.json"))
         if model_only: res = {m: v for m, v in res.items() if m.startswith("model")}
         json.dump(res, open(f"stage_publish/results/{show}/results.json", "w"))
-    run(["git", "pull", "--rebase", "-q"])
+    if not OFFLINE: run(["git", "pull", "--rebase", "-q"])
     r = subprocess.run([sys.executable, "-m", "tools.publish_dashboard", "--label", label, "--notes", notes, "--runs", "stage_publish/runs",
         "--results", "stage_publish/results", "--data", extra[name]["data"], "--ckpt", extra[name].get("ckpt", f"runs/{name}/last.pt"), "--baselines", *extra[name]["base"],
-        "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100", *(["--block", str(extra[name]["block"])] if "block" in extra[name] else [])])
+        "--T", "32", "--horizon", "64", "--sample", "0", "--keep", "100", *(["--no-push"] if OFFLINE else []), *(["--block", str(extra[name]["block"])] if "block" in extra[name] else [])])
     if r.returncode == 0: open(marker, "w").close()
     shutil.rmtree("stage_publish", ignore_errors=True)
 
-# do not leave the token in .git/config
-run(["git", "remote", "set-url", "origin", "https://github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
+if OFFLINE: sys.exit(0)
+try:
+    run(["git", "pull", "--rebase", "-q"]); run(["git", "push", "-q"])  # exports committed by an OFFLINE job
+finally:  # do not leave the token in .git/config
+    run(["git", "remote", "set-url", "origin", "https://github.com/Alessio-Pecilli/Hamiltonian-Blind-In-Context-Propagator.git"])
