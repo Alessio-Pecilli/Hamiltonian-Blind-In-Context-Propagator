@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261106-173532_n10-roll-out-a-blocchi-e-orizzonte-variabile-hpc.json",
+  "latest": "runs/20261110-152242_n10-training-su-64-hamiltoniane-fisse-test-su-hamiltoniane-nuove-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261110-152242_n10-training-su-64-hamiltoniane-fisse-test-su-hamiltoniane-nuove-hpc.json",
+      "label": "n10: training su 64 hamiltoniane fisse, test su hamiltoniane nuove (HPC)",
+      "generated_at": "2026-11-10T15:22:42",
+      "git_commit": "1b3f7acbea4b0fe67fa92bbdacf2715a56bee031",
+      "notes": "n=10 qubit, modello piccolo, roll out a blocchi da 16 (come la voce precedente), 40000 step. Training su 64 hamiltoniane fisse (grafo, J, h), 125 stati iniziali ciascuna; test su 20 hamiltoniane mai viste, 25 stati ciascuna. Confronto con lo stesso modello addestrato su 8000 hamiltoniane diverse (una traiettoria ciascuna). Baseline: DMD stimato sul contesto (dmd) e libreria di 64 operatori DMD, uno per hamiltoniana di training, combinati con pesi stimati sul contesto (dmd_lib)."
+    },
     {
       "file": "runs/20261106-173532_n10-roll-out-a-blocchi-e-orizzonte-variabile-hpc.json",
       "label": "n10: roll out a blocchi e orizzonte variabile (HPC)",
