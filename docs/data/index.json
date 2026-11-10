@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261110-152242_n10-training-su-64-hamiltoniane-fisse-test-su-hamiltoniane-nuove-hpc.json",
+  "latest": "runs/20261110-152436_n10-training-su-64-hamiltoniane-fisse-test-sulle-stesse-con-stati-nuovi-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261110-152436_n10-training-su-64-hamiltoniane-fisse-test-sulle-stesse-con-stati-nuovi-hpc.json",
+      "label": "n10: training su 64 hamiltoniane fisse, test sulle stesse con stati nuovi (HPC)",
+      "generated_at": "2026-11-10T15:24:36",
+      "git_commit": "b57f11f6e7d83a88aaee62d1ee5d406f82f40fb2",
+      "notes": "Come la voce precedente, ma il test usa le 64 hamiltoniane del training con stati iniziali nuovi (8 per hamiltoniana): misura quanto si perde passando a parametri mai visti."
+    },
     {
       "file": "runs/20261110-152242_n10-training-su-64-hamiltoniane-fisse-test-su-hamiltoniane-nuove-hpc.json",
       "label": "n10: training su 64 hamiltoniane fisse, test su hamiltoniane nuove (HPC)",
