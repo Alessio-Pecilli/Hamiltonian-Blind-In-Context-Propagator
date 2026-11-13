@@ -12,7 +12,7 @@ Baselines (Sec. 7.1) are deliberately lightweight.
 | file | spec | content |
 |---|---|---|
 | `data/physics.py` | 2.3–2.4 | sparse Pauli Hamiltonians, exact evolution (dense `expm` for n ≤ 12, Krylov above), observables |
-| `data/generate.py` | 2.1–2.2, 2.6 | samplers (`tfim`, plus `xxz`, `heisenberg`, `lr_ising`), HDF5 writer, CLI |
+| `data/generate.py` | 2.1–2.2, 2.6 | samplers (`tfim`, plus `xxz`, `heisenberg`, `lr_ising`, the open chains `chain` and `chain_dis` of the older project, and `mix`: all of them in turn), HDF5 writer, CLI |
 | `data/dataset.py` | 2.7, 5.1 | windowed loader: T, t0, anchors, site permutation, right-padding collate |
 | `model/embed.py`, `spatial.py`, `temporal.py`, `body.py` | 3.2–3.5 | embeddings, pair-biased spatial attention + pair update, causal MHA (RoPE) + causal depthwise conv |
 | `model/head_generator.py` | 3.6 | Head A: G = (A − Aᵀ) − SSᵀ, `matrix_exp`, linear/bilinear decoders |
@@ -48,6 +48,7 @@ bash scripts/make_datasets.sh hpc 32
 python train.py --preset hpc --set train.out_dir=runs/hpc_A
 python train.py --preset hpc --set train.out_dir=runs/hpc_B model.head=B     # ablation
 bash scripts/make_datasets.sh transfer 32                                   # Stage 3 test sets
+bash scripts/make_datasets.sh mix 32                                        # n = 10, six families mixed (pipeline stage M)
 python -m eval.evaluate --ckpt runs/hpc_A/last.pt --data datasets/n12/test.h5 --out results/n12
 ```
 
@@ -73,7 +74,8 @@ It writes `docs/data/runs/<YYYYmmdd-HHMMSS>_<label>.json`, puts it first (and as
 `docs/data/index.json`, keeps the last `--keep N` exports (default 20), then runs `git add docs/data`,
 `git commit -m "dashboard: <label>"` and `git push`. Options: `--no-push`, `--dry-run`, `--keep`; it warns
 when the JSON exceeds 5 MB. Pages updates about a minute after the push. On Windows,
-`scriptsun_all.ps1 -Publish` does the whole pipeline and publishes at the end.
+`scripts
+un_all.ps1 -Publish` does the whole pipeline and publishes at the end.
 
 The page opens `data/index.json`, loads `latest`, and lets you pick older exports in the *Export* menu.
 Without the manifest it falls back to `data/demo.json` (a small cloud demo run). A local `dashboard_data.json`

@@ -48,6 +48,22 @@ extra = {"n8_resid_wide": N8, "n8_resid_long": N8, "n10_small": dict(BIG, data="
          "n10_small_norm": dict(BIG, data="datasets/n10/test.h5"), "n10_small_roll": dict(BIG, data="datasets/n10/test.h5", block=16),
          "n10_sets_roll": dict(base=["persistence", "dmd", "dmd_lib"], data="datasets/n10sets/test.h5", block=16),
          "n10_sets_roll_seen": dict(base=["persistence", "dmd", "dmd_lib"], data="datasets/n10sets/test_seen.h5", block=16, ckpt="runs/n10_sets_roll/last.pt")}
+FAMS = {"tfim": "TFIM su grafo casuale", "xxz": "XXZ su grafo casuale", "heisenberg": "Heisenberg disordinato", "lr_ising": "Ising a lungo raggio",
+        "chain": "catena TFIM uniforme (vecchio progetto)", "chain_dis": "catena TFIM con J disordinati (vecchio progetto)"}
+MIXB = dict(base=["persistence", "dmd", "dmd4"], block=16, ckpt="runs/n10_mix_roll/last.pt")
+jobs.append(("n10_mix_roll", [("n10_mix_roll", "n10_mix_roll", "training su 6 famiglie, test misto", False),
+                              ("n10_small_roll", "n10_small_roll_on_mix", "training solo TFIM, stesso test", True)],
+             "n10: training su 6 famiglie di hamiltoniane, test misto (HPC)",
+             "n=10 qubit, modello piccolo, roll out a blocchi da 16. Training su 12000 hamiltoniane di sei famiglie (2000 ciascuna): TFIM, XXZ e Heisenberg disordinato su grafo casuale, Ising a lungo raggio, catene TFIM aperte del vecchio progetto (uniforme e con J disordinati). Test su 600 hamiltoniane nuove delle stesse famiglie. Confronto con il modello addestrato solo su TFIM e con DMD."))
+extra["n10_mix_roll"] = dict(MIXB, data="datasets/n10mix/test.h5")
+jobs.append(("n10_mix_roll_on_n10", [("n10_small_roll", "n10_small_roll", "training solo TFIM", False), ("n10_mix_roll", "n10_mix_roll_on_n10", "training su 6 famiglie", True)],
+             "n10: training su 6 famiglie, test sul TFIM originale (HPC)", "Il modello addestrato sulle sei famiglie valutato sul test TFIM delle voci precedenti: quanto costa la varieta sul caso di partenza."))
+extra["n10_mix_roll_on_n10"] = dict(MIXB, data="datasets/n10/test.h5")
+for fam, desc in FAMS.items():
+    jobs.append((f"n10_mix_roll_on_{fam}", [(f"n10_mix_roll", f"n10_mix_roll_on_{fam}", "training su 6 famiglie", False),
+                                            ("n10_small_roll", f"n10_small_roll_on_{fam}", "training solo TFIM", True)],
+                 f"n10: training su 6 famiglie, test su {desc} (HPC)", f"Come la voce del test misto, ma il test contiene solo la famiglia: {desc} (300 hamiltoniane nuove)."))
+    extra[f"n10_mix_roll_on_{fam}"] = dict(MIXB, data=f"datasets/n10mix/test_{fam}.h5")
 os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"

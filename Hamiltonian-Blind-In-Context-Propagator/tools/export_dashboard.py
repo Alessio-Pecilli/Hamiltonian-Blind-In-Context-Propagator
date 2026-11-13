@@ -172,7 +172,7 @@ def _pack(preds, tgt_n, tgt_e, attrs, J, h):
                  lam_min=_r(lam_min(pn.astype(np.float64), pe.astype(np.float64)), 5))
         # edge predictions only for ZZ, XX and YZ channels to keep the file small
         d["edge_sel"] = {c: _r(pe[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))}
-        if attrs.get("family") in ("tfim", "lr_ising"):
+        if attrs.get("family") in ("tfim", "lr_ising", "chain", "chain_dis"):
             d["energy"] = _r(tfim_energy(pn, pe, J, h), 5)
         out_preds[k] = d
     return out_preds
@@ -197,6 +197,8 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=
         attrs = dict(f.attrs)
         node, edge = f["node"][idx], f["edge"][idx]
         J, h, adj, seed, dt = f["J"][idx], f["h"][idx], f["adj"][idx], f["seed"][idx], f["dt"][idx]
+        if "fam" in f:  # mixed file: the family of this trajectory
+            attrs["family"] = f["fam"][idx].decode()
     L, n = node.shape[:2]
     Hk = min(horizon, L - 1 - T)
     ctx_n, ctx_e = node[: T + 1], edge[: T + 1]
@@ -257,7 +259,7 @@ def sample_block(data, idx, T, horizon, ckpt, baselines, device="cpu", sample_T=
              edge_sel={c: _r(full_e[..., ci], 4) for c, ci in (("xx", 0), ("yz", 5), ("zz", 8))},
              lam_min_true=_r(lam_min(full_n.astype(np.float64), full_e.astype(np.float64)), 5),
              preds=out_preds, **extra)
-    if attrs.get("family") in ("tfim", "lr_ising"):
+    if attrs.get("family") in ("tfim", "lr_ising", "chain", "chain_dis"):
         s["energy_true"] = _r(tfim_energy(full_n, full_e, J, h), 5)
     return s
 

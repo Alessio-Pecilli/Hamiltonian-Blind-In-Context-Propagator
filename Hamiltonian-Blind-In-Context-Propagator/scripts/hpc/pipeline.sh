@@ -16,6 +16,9 @@
 #   P  n10_sets_roll  as S, but trained on 64 fixed Hamiltonians (125 initial states each) and tested on 20 new
 #      ones (and on the 64 seen ones with new states); baselines: in-context DMD and a library of the 64 per-set
 #      DMD operators mixed with weights fitted on the context. Plus n10_small_roll (8000 Hamiltonians) on the same test.
+#   M  n10_mix_roll   as S, trained on six families of Hamiltonians mixed (tfim, xxz, heisenberg, lr_ising and the open
+#      chains of the older project; 2000 each), tested on the mixed test set and on each family; the TFIM-only model
+#      of S (n10_small_roll) is evaluated on the same files, and the mixed model on the TFIM test of S.
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -30,10 +33,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -166,6 +169,26 @@ for s in $STAGES; do
       EVX=(--block 16)
       stage n10_sets_roll hpc "$STEPS_P" datasets/n10sets/test.h5 "8 16 32 64 128" "persistence dmd dmd_lib" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4 train.T_max=96 "${D10S[@]}"         && reeval n10_sets_roll n10_sets_roll_seen datasets/n10sets/test_seen.h5 "8 16 32 64 128" "persistence dmd dmd_lib"
       [ -f runs/n10_small_roll/last.pt ] && reeval n10_small_roll n10_small_roll_on_sets datasets/n10sets/test.h5 "8 16 32 64 128" ""
+      EVX=() ;;
+    M)
+      FAMS="tfim xxz heisenberg lr_ising chain chain_dis"
+      if [ "${SMOKE:-0}" = 1 ]; then
+        [ -f datasets/n10mix/.ok ] || { for sp in train:161:1:mix val:161:2:mix test:192:3:mix $(for f in $FAMS; do echo test_$f:192:4:$f; done); do IFS=: read f L sd fam <<< "$sp"
+          python -m data.generate --dt 0.1 --workers 2 --n 10 --ntraj 6 --L_traj $L --seed $sd --family $fam --out datasets/n10mix/$f.h5 || break; done; [ -f datasets/n10mix/test_chain_dis.h5 ] && touch datasets/n10mix/.ok; } || { fail "mix smoke data"; continue; }
+      else make_data mix datasets/n10mix "$W" || { fail "n10mix datasets"; continue; }; fi
+      n10data || { fail "n10 datasets"; continue; }
+      DMIX=(data.train=datasets/n10mix/train.h5 data.val=datasets/n10mix/val.h5 data.test=datasets/n10mix/test.h5)
+      EVX=(--block 16)
+      stage n10_mix_roll hpc "$STEPS_M" datasets/n10mix/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}" \
+        train.H=16 train.rollout_blocks=4 train.T_max=96 "${DMIX[@]}"
+      if [ -f runs/n10_mix_roll/last.pt ]; then
+        reeval n10_mix_roll n10_mix_roll_on_n10 datasets/n10/test.h5 "8 16 32 64 128" ""
+        for f in $FAMS; do reeval n10_mix_roll n10_mix_roll_on_$f datasets/n10mix/test_$f.h5 "8 16 32 64 128" "persistence dmd dmd4"; done
+      fi
+      if [ -f runs/n10_small_roll/last.pt ]; then   # the TFIM-only model on the same files: what the diversity buys
+        reeval n10_small_roll n10_small_roll_on_mix datasets/n10mix/test.h5 "8 16 32 64 128" ""
+        for f in $FAMS; do reeval n10_small_roll n10_small_roll_on_$f datasets/n10mix/test_$f.h5 "8 16 32 64 128" ""; done
+      fi
       EVX=() ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }

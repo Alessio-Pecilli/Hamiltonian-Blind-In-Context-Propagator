@@ -17,7 +17,8 @@ import numpy as np
 
 from data import physics
 
-FAMILIES = ("tfim", "xxz", "heisenberg", "lr_ising")
+FAMILIES = ("tfim", "xxz", "heisenberg", "lr_ising", "chain", "chain_dis")
+MIX = "mix"  # dataset-level family: every trajectory (or parameter set) takes one of FAMILIES in turn
 
 
 # ----------------------------------------------------------------------------------------
@@ -80,15 +81,29 @@ def sample_system(n: int, family: str, rng: np.random.Generator):
         return terms, J, h, adj
 
     if family == "lr_ising":
-        # power-law long-range TFIM on random positions on a ring: J_ij = J0 / r_ij^alpha
+        # power-law long-range TFIM on jittered ring positions: J_ij = J0 / r_ij^alpha
+        # (r_ij >= 0.6: with fully random positions two sites can sit on top of each other and J_ij diverges)
         alpha = rng.uniform(1.0, 3.0)
-        pos = np.sort(rng.uniform(0, n, size=n))
+        pos = np.arange(n) + rng.uniform(-0.2, 0.2, size=n)
         d = np.abs(pos[:, None] - pos[None, :])
         d = np.minimum(d, n - d) + np.eye(n)
         J = rng.uniform(0.5, 1.5) / d**alpha
         np.fill_diagonal(J, 0.0)
         h = rng.uniform(0.5, 1.5, size=n)
         adj = ~np.eye(n, dtype=bool)
+        return physics.tfim_terms(J, h), J, h, adj
+
+    if family in ("chain", "chain_dis"):
+        # the open TFIM chains of the older quantum_sequence_prediction project
+        adj = np.zeros((n, n), bool)
+        i = np.arange(n - 1)
+        adj[i, i + 1] = adj[i + 1, i] = True
+        if family == "chain":  # one J and one h for the whole chain, each uniform in [0.2, 2]
+            Jb, h = np.full(n - 1, rng.uniform(0.2, 2.0)), np.full(n, rng.uniform(0.2, 2.0))
+        else:                  # disordered bonds J_i ~ N(1, 1) (either sign), h = 1
+            Jb, h = rng.normal(1.0, 1.0, size=n - 1), np.ones(n)
+        J = np.zeros((n, n))
+        J[i, i + 1] = J[i + 1, i] = Jb
         return physics.tfim_terms(J, h), J, h, adj
 
     raise ValueError(f"unknown family {family!r}; choose from {FAMILIES}")
@@ -148,18 +163,24 @@ def _worker(args):
 # Dataset file
 # ----------------------------------------------------------------------------------------
 def generate_file(out: str, n: int, ntraj: int, L: int, dt: float, family: str, seed: int,
-                  workers: int = 1, verbose: bool = True, n_sets: int = 0, set_seed: int = 0) -> None:
+                  workers: int = 1, verbose: bool = True, n_sets: int = 0, set_seed: int = 0,
+                  mix: tuple[str, ...] = FAMILIES) -> None:
     """n_sets > 0: trajectory k uses parameter set k % n_sets (Hamiltonian from traj_seed(set_seed, set),
-    new random initial state each time); same set_seed and n_sets = same Hamiltonians."""
+    new random initial state each time); same set_seed and n_sets = same Hamiltonians.
+    family = "mix": trajectory k (parameter set i when n_sets > 0) takes family mix[k % len(mix)]; the
+    per-trajectory family is stored in the "fam" dataset."""
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     seeds = [traj_seed(seed, k) for k in range(ntraj)]
     sets = [k % n_sets if n_sets else -1 for k in range(ntraj)]
-    jobs = [(n, L, dt, family, s, traj_seed(set_seed, i) if n_sets else None) for s, i in zip(seeds, sets)]
+    fams = [mix[(i if n_sets else k) % len(mix)] if family == MIX else family for k, i in enumerate(sets)]
+    jobs = [(n, L, dt, fm, s, traj_seed(set_seed, i) if n_sets else None) for fm, s, i in zip(fams, seeds, sets)]
     t0 = time.time()
     with h5py.File(out, "w") as f:
         f.attrs.update(dict(n=n, L_traj=L, dt=dt, family=family, base_seed=seed, ntraj=ntraj,
-                            n_sets=n_sets, set_seed=set_seed, spec="propagator_spec v0.1"))
+                            n_sets=n_sets, set_seed=set_seed, spec="propagator_spec v0.1",
+                            families=",".join(mix) if family == MIX else family))
         f.create_dataset("set_id", data=np.array(sets, "i4"))
+        f.create_dataset("fam", data=np.array(fams, "S16"))
         dn = f.create_dataset("node", (ntraj, L, n, 3), "f4", chunks=(1, L, n, 3))
         de = f.create_dataset("edge", (ntraj, L, n, n, 9), "f4", chunks=(1, L, n, n, 9))
         ddt = f.create_dataset("dt", (ntraj,), "f4")
@@ -189,14 +210,16 @@ def main():
     p.add_argument("--ntraj", type=int, required=True)
     p.add_argument("--L_traj", type=int, default=160)
     p.add_argument("--dt", type=float, default=0.1)
-    p.add_argument("--family", default="tfim", choices=FAMILIES)
+    p.add_argument("--family", default="tfim", choices=FAMILIES + (MIX,))
+    p.add_argument("--mix", nargs="+", default=list(FAMILIES), choices=FAMILIES, help="families of --family mix")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
     p.add_argument("--workers", type=int, default=1)
     p.add_argument("--n_sets", type=int, default=0, help="> 0: that many fixed Hamiltonians, many initial states each")
     p.add_argument("--set_seed", type=int, default=0, help="seed of the parameter sets (reuse it for a seen-parameters test)")
     a = p.parse_args()
-    generate_file(a.out, a.n, a.ntraj, a.L_traj, a.dt, a.family, a.seed, a.workers, n_sets=a.n_sets, set_seed=a.set_seed)
+    generate_file(a.out, a.n, a.ntraj, a.L_traj, a.dt, a.family, a.seed, a.workers, n_sets=a.n_sets, set_seed=a.set_seed,
+                  mix=tuple(a.mix))
 
 
 if __name__ == "__main__":

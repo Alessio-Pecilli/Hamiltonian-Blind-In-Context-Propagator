@@ -72,6 +72,39 @@ def test_other_families_run():
         simulate(5, 10, 0.1, fam, 1)
 
 
+def test_chain_families():
+    """The open TFIM chains of the older project: nearest-neighbour bonds only."""
+    for fam in ("chain", "chain_dis"):
+        tr = simulate(5, 4, 0.1, fam, 2)
+        assert tr.adj.sum() == 8 and all(tr.adj[i, i + 1] for i in range(4))
+        assert np.array_equal(tr.J != 0, tr.adj)
+    tr = simulate(5, 4, 0.1, "chain", 2)
+    assert np.ptp(tr.h) == 0 and np.ptp(tr.J[tr.adj]) == 0 and 0.2 <= tr.h[0] <= 2.0
+
+
+def test_mixed_file(tmp_path):
+    """family = mix: families in turn, stored per trajectory, regenerated bit for bit; the oracle follows them."""
+    from data.generate import generate_file
+    from eval.baselines import run_baselines
+    p = str(tmp_path / "mix.h5")
+    generate_file(p, n=4, ntraj=2 * len(FAMILIES), L=20, dt=0.1, family="mix", seed=3, verbose=False)
+    with h5py.File(p) as f:
+        fams = [x.decode() for x in f["fam"][()]]
+        assert fams == list(FAMILIES) * 2
+        for k in (1, 4, 9):
+            tr = simulate(4, 20, 0.1, fams[k], int(f["seed"][k]))
+            assert np.array_equal(tr.node, f["node"][k])
+    assert len(TrajectoryDataset(p, (8, 8), 4, preload=True)[0]["node"]) == 13
+    r = run_baselines(p, ["oracle"], [8], 8, verbose=False)["oracle"][8]
+    assert max(r["rmse_n"]) < 1e-5
+    # with parameter sets the family goes with the set
+    generate_file(p, n=4, ntraj=12, L=12, dt=0.1, family="mix", seed=3, verbose=False, n_sets=3, set_seed=1,
+                  mix=("tfim", "xxz"))
+    with h5py.File(p) as f:
+        assert [x.decode() for x in f["fam"][:6]] == ["tfim", "xxz", "tfim"] * 2
+        assert np.array_equal(f["J"][0], f["J"][3]) and not np.array_equal(f["J"][0], f["J"][1])
+
+
 def test_loader_permutation(tiny_h5):
     torch.manual_seed(0)
     ds = TrajectoryDataset(tiny_h5, (8, 16), 4, anchors=2, permute=False)

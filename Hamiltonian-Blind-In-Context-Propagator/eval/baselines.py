@@ -236,6 +236,7 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
         L = f["node"].shape[1]
         N = f["node"].shape[0] if max_traj is None else min(max_traj, f["node"].shape[0])
         node_all, edge_all, seeds = f["node"][:N], f["edge"][:N], f["seed"][:N]
+        fams = [x.decode() for x in f["fam"][:N]] if "fam" in f else [str(attrs["family"])] * N  # mixed files
     if "hl_oracle" in names and attrs["family"] != "tfim":
         raise ValueError("hl_oracle baseline only implements the TFIM estimator")
     for name in names:
@@ -251,7 +252,7 @@ def run_baselines(path, names, T_list, horizon, max_traj=None, t0=0, verbose=Tru
                 ctx_n, ctx_e = node_all[k, t0: t0 + T + 1], edge_all[k, t0: t0 + T + 1]
                 tgt_n, tgt_e = node_all[k, t0 + T + 1: t0 + T + 1 + Hk], edge_all[k, t0 + T + 1: t0 + T + 1 + Hk]
                 ts = time.perf_counter()
-                pn, pe = fn(ctx_n, ctx_e, Hk, attrs=attrs, seed=seeds[k], t_abs=t0 + T)
+                pn, pe = fn(ctx_n, ctx_e, Hk, attrs=dict(attrs, family=fams[k]), seed=seeds[k], t_abs=t0 + T)
                 t_tot += time.perf_counter() - ts
                 a, b = rmse_per_traj(pn[None], tgt_n[None], pe[None], tgt_e[None])
                 rn.append(a[0]); re.append(b[0])
