@@ -64,6 +64,16 @@ for fam, desc in FAMS.items():
                                             ("n10_small_roll", f"n10_small_roll_on_{fam}", "training solo TFIM", True)],
                  f"n10: training su 6 famiglie, test su {desc} (HPC)", f"Come la voce del test misto, ma il test contiene solo la famiglia: {desc} (300 hamiltoniane nuove)."))
     extra[f"n10_mix_roll_on_{fam}"] = dict(MIXB, data=f"datasets/n10mix/test_{fam}.h5")
+jobs.append(("n10_small_roll_we4", [("n10_small_roll", "n10_small_roll", "peso correlatori 1 (riferimento)", False),
+                                    ("n10_small_roll_we4", "n10_small_roll_we4", "peso correlatori 4", True)],
+             "n10: correlatori pesati 4 volte nella perdita (HPC)",
+             "Come il roll out a blocchi da 16, ma l'errore sui correlatori di coppia pesa 4 volte (stessa scala dei termini a un qubit). Sonda lineare di h, J e grafo attiva con stop-gradient: non entra nel modello, misura solo quanto i parametri si leggono dalle feature."))
+extra["n10_small_roll_we4"] = dict(BIG, data="datasets/n10/test.h5", block=16)
+for st in (128, 64):
+    jobs.append((f"n10_small_roll_start{st}", [("n10_small_roll", f"n10_small_roll_start{st}", f"previsione dal passo {st}", False)],
+                 f"n10: contesto variabile, previsione sempre dal passo {st} (HPC)",
+                 f"Il modello a blocchi da 16 rivalutato con tutti i contesti che finiscono al passo {st} (finestra t0 = {st} - T): separa la lunghezza del contesto dal punto della traiettoria. La traiettoria di esempio parte invece da t = 0."))
+    extra[f"n10_small_roll_start{st}"] = dict(BIG, data="datasets/n10/test.h5", block=16, ckpt="runs/n10_small_roll/last.pt")
 os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"

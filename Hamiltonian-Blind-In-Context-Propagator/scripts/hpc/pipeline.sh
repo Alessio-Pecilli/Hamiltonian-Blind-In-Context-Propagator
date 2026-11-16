@@ -18,6 +18,9 @@
 #      DMD operators mixed with weights fitted on the context. Plus n10_small_roll (8000 Hamiltonians) on the same test.
 #   X  n10_small_roll re-evaluated with every context ending at the same step (--start 128 and 64): separates the
 #      effect of the context length from that of the point of the trajectory (windows otherwise all start at t = 0)
+#   W  n10_small_roll_we4  as S, with the pair correlators weighted 4x in the loss (loss.w_edge=4: same scale as the
+#      single-qubit terms). The stop-gradient probe of (h, J, adj) is on: it does not touch the body (no Hamiltonian
+#      enters the model), it only tells whether the couplings can be read from the features and whether that improves with T.
 #   M  n10_mix_roll   as S, trained on six families of Hamiltonians mixed (tfim, xxz, heisenberg, lr_ising and the open
 #      chains of the older project; 2000 each), tested on the mixed test set and on each family; the TFIM-only model
 #      of S (n10_small_roll) is evaluated on the same files, and the mixed model on the TFIM test of S.
@@ -35,10 +38,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -177,6 +180,12 @@ for s in $STAGES; do
       for st in 128 64; do
         EVX=(--block 16 --start $st); reeval n10_small_roll n10_small_roll_start$st datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4"
       done
+      EVX=() ;;
+    W)
+      n10data || { fail "n10 datasets"; continue; }
+      EVX=(--block 16)
+      stage n10_small_roll_we4 hpc "$STEPS_W" datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}" \
+        train.H=16 train.rollout_blocks=4 train.T_max=96 loss.w_edge=4 model.probe=true loss.lambda_probe=1.0
       EVX=() ;;
     M)
       FAMS="tfim xxz heisenberg lr_ising chain chain_dis"

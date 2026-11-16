@@ -34,3 +34,13 @@ def test_amp_norm_loss_is_scale_free():
     l1 = pred_loss(pn, pe, tn, te, amp_floor=1e-4)
     l2 = pred_loss(0.1 * pn, 0.1 * pe, 0.1 * tn, 0.1 * te, amp_floor=1e-4)
     assert torch.allclose(l1, l2, rtol=1e-4) and torch.allclose(l1, torch.tensor(0.01), rtol=1e-3)
+
+
+def test_edge_weight():
+    """w_edge multiplies the correlator term only."""
+    torch.manual_seed(0)
+    pn, tn = torch.randn(2, 1, 3, 4, 3), torch.randn(2, 1, 3, 4, 3)
+    pe, te = torch.randn(2, 1, 3, 4, 4, 9), torch.randn(2, 1, 3, 4, 4, 9)
+    node_only = pred_loss(pn, te * 0, tn, te * 0)
+    l1, l4 = pred_loss(pn, pe, tn, te), pred_loss(pn, pe, tn, te, w_edge=4.0)
+    assert torch.allclose(l4 - node_only, 4 * (l1 - node_only), atol=1e-6)

@@ -32,6 +32,7 @@ common:
     per_k_norm: false      # divide each k by the persistence error at that k (overrides w_k)
     w_k: uniform           # uniform | linear  (w_k proportional to k, normalised to mean 1)
     amp_norm: false        # relative loss: error / power of the true signal per window and k (overrides the two above)
+    w_edge: 1.0            # weight of the pair correlators in L_pred (4 evens them out with the single-qubit terms)
     amp_floor: 0.03        # amplitude floor of amp_norm, so near-zero targets do not blow the loss up
   optim:
     lr: 3.0e-4

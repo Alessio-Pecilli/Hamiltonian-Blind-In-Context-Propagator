@@ -52,13 +52,15 @@ def main():
     ax.plot([Ts[0] / 1.3, Ts[-1] * 1.3], [Ts[0] / 1.3, Ts[-1] * 1.3], ls="--", color=MUTED, lw=1)
     ax.text(90, 100, "k = T", color=MUTED, rotation=38, ha="center", va="bottom", fontsize=9)
     ax.axhline(Hmax, color=MUTED, lw=1, ls=":")
-    ax.text(Ts[0] / 1.3, Hmax * 1.07, f"limite testato: {Hmax} passi", color=MUTED, fontsize=9, va="bottom")
+    ax.text(Ts[0] / 1.3, Hmax * 1.45, f"limite testato: {Hmax} passi", color=MUTED, fontsize=9, va="bottom")
     for name, col, mk, byT in series:
         pts = [(T, *reach(byT[str(T)]["corr_n"], a.thr), len(byT[str(T)]["corr_n"])) for T in Ts]
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=col, lw=2, zorder=3)
         for T, k, capped, H in pts:  # hollow marker: the correlation never dropped within the tested steps
             ax.plot(T, k, mk, ms=8, color=col, mfc=SURF if capped else col, mew=2, zorder=4)
-        ax.text(pts[2][0], pts[2][1] * 0.68, name, color=INK, fontsize=10, fontweight="bold", ha="center")
+            ax.annotate(f"{'≥ ' if capped else ''}{k}", (T, k), xytext=(0, 9 if (name == "DMD") == (T == Ts[-1]) else -16),
+                        textcoords="offset points", ha="center", color=MUTED, fontsize=8.5)
+        ax.text(pts[2][0], pts[2][1] * (0.62 if name == "Transformer" else 1.5), name, color=INK, fontsize=10, fontweight="bold", ha="center")
     ax.set_xscale("log", base=2); ax.set_yscale("log", base=2)
     ax.set_xticks(Ts); ax.set_xticklabels(Ts); ax.set_yticks([2, 4, 8, 16, 32, 64]); ax.set_yticklabels([2, 4, 8, 16, 32, 64])
     ax.set_xlim(Ts[0] / 1.3, Ts[-1] * 1.3); ax.set_ylim(2, 150)
