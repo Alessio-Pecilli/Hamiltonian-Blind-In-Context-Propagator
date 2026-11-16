@@ -16,6 +16,8 @@
 #   P  n10_sets_roll  as S, but trained on 64 fixed Hamiltonians (125 initial states each) and tested on 20 new
 #      ones (and on the 64 seen ones with new states); baselines: in-context DMD and a library of the 64 per-set
 #      DMD operators mixed with weights fitted on the context. Plus n10_small_roll (8000 Hamiltonians) on the same test.
+#   X  n10_small_roll re-evaluated with every context ending at the same step (--start 128 and 64): separates the
+#      effect of the context length from that of the point of the trajectory (windows otherwise all start at t = 0)
 #   M  n10_mix_roll   as S, trained on six families of Hamiltonians mixed (tfim, xxz, heisenberg, lr_ising and the open
 #      chains of the older project; 2000 each), tested on the mixed test set and on each family; the TFIM-only model
 #      of S (n10_small_roll) is evaluated on the same files, and the mixed model on the TFIM test of S.
@@ -169,6 +171,12 @@ for s in $STAGES; do
       EVX=(--block 16)
       stage n10_sets_roll hpc "$STEPS_P" datasets/n10sets/test.h5 "8 16 32 64 128" "persistence dmd dmd_lib" "${RES[@]}" "${SMALL[@]}"         train.H=16 train.rollout_blocks=4 train.T_max=96 "${D10S[@]}"         && reeval n10_sets_roll n10_sets_roll_seen datasets/n10sets/test_seen.h5 "8 16 32 64 128" "persistence dmd dmd_lib"
       [ -f runs/n10_small_roll/last.pt ] && reeval n10_small_roll n10_small_roll_on_sets datasets/n10sets/test.h5 "8 16 32 64 128" ""
+      EVX=() ;;
+    X)
+      n10data || { fail "n10 datasets"; continue; }
+      for st in 128 64; do
+        EVX=(--block 16 --start $st); reeval n10_small_roll n10_small_roll_start$st datasets/n10/test.h5 "8 16 32 64 128" "persistence dmd dmd4"
+      done
       EVX=() ;;
     M)
       FAMS="tfim xxz heisenberg lr_ising chain chain_dis"

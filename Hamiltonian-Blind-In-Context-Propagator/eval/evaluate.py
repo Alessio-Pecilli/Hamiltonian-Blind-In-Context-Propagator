@@ -64,16 +64,22 @@ def main():
     ap.add_argument("--max_traj", type=int, default=None)
     ap.add_argument("--batch_size", type=int, default=16)
     ap.add_argument("--block", type=int, default=None, help="roll out in blocks of this many steps (predictions fed back)")
+    ap.add_argument("--start", type=int, default=None,
+                    help="fixed prediction start: every context T ends at this step (window t0 = start - T), so that T "
+                         "is compared at the same point of the trajectory instead of at t0 = 0")
     ap.add_argument("--out", default="results")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     device = torch.device(a.device)
     results = {}
+    t0s = {T: 0 if a.start is None else a.start - T for T in a.T if a.start is None or T <= a.start}
     if a.ckpt:
         model, ck = load_model(a.ckpt, device)
         mb = None if a.max_traj is None else -(-a.max_traj // a.batch_size)
-        res = evaluate_model(model, a.data, a.T, a.horizon, device, a.batch_size, max_batches=mb, block=a.block)
+        res = {}
+        for T, t0 in t0s.items():
+            res.update(evaluate_model(model, a.data, [T], a.horizon, device, a.batch_size, max_batches=mb, block=a.block, t0=t0))
         results[f"model({model.head_type})"] = res
         for T, r in res.items():
             print(f"  model        T={T:4d}  rmse_n(1)={r['rmse_n'][0]:.4f}  rmse_n(H)={r['rmse_n'][-1]:.4f}  "
@@ -82,7 +88,9 @@ def main():
                   f"G: auroc={r.get('gen_auroc_adj', float('nan')):.3f} corrJ={r.get('gen_corr_J', float('nan')):.3f} "
                   f"corrh={r.get('gen_corr_h', float('nan')):.3f}")
     if a.baselines:
-        results.update(run_baselines(a.data, a.baselines, a.T, a.horizon, a.max_traj))
+        for T, t0 in t0s.items():
+            for name, r in run_baselines(a.data, a.baselines, [T], a.horizon, a.max_traj, t0=t0).items():
+                results.setdefault(name, {}).update(r)
     with open(os.path.join(a.out, "results.json"), "w") as f:
         json.dump({k: {str(t): r for t, r in v.items()} for k, v in results.items()}, f, indent=1)
     plot(results, a.out)
