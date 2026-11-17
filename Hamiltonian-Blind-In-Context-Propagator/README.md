@@ -91,6 +91,13 @@ Large datasets: keep `data.preload=false` (HDF5 is read lazily per item).
 
 * `model.use_S: false` (default in `configs/config.yaml`): no dissipation, `G = A − Aᵀ` is skew-symmetric and `‖S‖_F = 0`;
   configs without the key keep the old behaviour (S active), so older checkpoints still load.
+* `loss.w_edge: 4` (default since 2026-11; earlier runs used 1): the pair-correlator term of `L_pred` is weighted 4x,
+  which puts it on the same scale as the single-qubit term (the correlators are about half as large).
+* `train.pair_batches: true` + `loss.lambda_swap > 0` (needs a file made with `--n_sets`, e.g. `make_datasets.sh groups`):
+  batches of pairs of trajectories of the same Hamiltonian; each window is also predicted at its first anchor with the
+  generator of its partner (moved to its site order), so G has to depend on the Hamiltonian and not on the state.
+  Nothing changes at test time (single trajectory). `G_mismatch` in the log is ||G - G_partner|| / ||G||.
+* Horizon figure: `python -m tools.plot_horizon --export <dashboard export>` (k*_rel on the relative error, thresholds 50% / 25%).
 * Pair-path options (`configs/config.yaml`, all on by default; configs without the keys keep the old network, so older
   checkpoints still load; ablate with `--set model.pair_attn=false` etc.):
   `model.pair_attn` causal temporal attention (RoPE) on every pair, besides the depthwise conv;

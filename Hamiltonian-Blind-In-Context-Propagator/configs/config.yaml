@@ -32,7 +32,10 @@ common:
     per_k_norm: false      # divide each k by the persistence error at that k (overrides w_k)
     w_k: uniform           # uniform | linear  (w_k proportional to k, normalised to mean 1)
     amp_norm: false        # relative loss: error / power of the true signal per window and k (overrides the two above)
-    w_edge: 1.0            # weight of the pair correlators in L_pred (4 evens them out with the single-qubit terms)
+    w_edge: 4.0            # weight of the pair correlators in L_pred: 4 evens them out with the single-qubit terms
+                           # (default since 2026-11; runs before that used 1)
+    lambda_swap: 0.0       # > 0 (needs train.pair_batches): cross-prediction with the generator of another
+                           # trajectory of the same Hamiltonian, so G depends on the system, not on the state
     amp_floor: 0.03        # amplitude floor of amp_norm, so near-zero targets do not blow the loss up
   optim:
     lr: 3.0e-4
@@ -48,6 +51,7 @@ common:
     rollout_blocks: 0      # > 0: predict R blocks of H steps, feeding each block back as context (scheduled sampling)
     rollout_p_max: 1.0     # final probability of feeding back the model's own block instead of the true one
     rollout_ramp: 0.5      # fraction of the steps over which that probability grows linearly from 0
+    pair_batches: false    # batches of pairs of trajectories of the same Hamiltonian (file made with --n_sets)
     eval_every: 1000
     eval_T: [8, 16, 32, 64]  # context lengths used for quick validation
     eval_batches: 10

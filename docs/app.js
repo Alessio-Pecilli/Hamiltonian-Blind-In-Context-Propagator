@@ -243,7 +243,7 @@ function renderOverview() {
   const tiles = [
     { e: tm("params", "Parametri"), v: r && r.params ? (r.params / 1e6).toFixed(2) + "M" : "–", d: r ? `${tm("preset", "preset")} ${esc(r.config.preset)} · ${tm("headA", "head")} ${esc(r.config.model.head)}` : "nessuna run" },
     { e: tm("step", "Step di training"), v: last ? last.step.toLocaleString("it-IT") : "–", d: steps ? `su ${steps.toLocaleString("it-IT")} configurati` : "" },
-    { e: `${tm("kstar", "k*")} a ${tm("T", "T")} = ${Tmax ?? "–"}`, v: mT ? mT.k_star : "–", d: mT ? `passi prevedibili con RMSE ≤ 0.05 (t = ${(mT.k_star * 0.1).toFixed(1)})` : "nessun risultato del modello" },
+    { e: `k*_rel (50%) a ${tm("T", "T")} = ${Tmax ?? "–"}`, v: mT && mT.rel_rmse_n ? kRel(mT.rel_rmse_n, 0.5) : "–", d: mT && mT.rel_rmse_n ? `passi con errore relativo ≤ 50% (al 25%: ${kRel(mT.rel_rmse_n, 0.25)}; RMSE ≤ 0.05: ${mT.k_star})` : "metriche relative assenti in questo export" },
     { e: `${tm("fidmean", "Fidelity media F̄₂")} a ${tm("T", "T")} = ${Tmax ?? "–"}`, v: mT && mT.fidelity2 ? meanK(mT.fidelity2).toFixed(3) : "–", d: mT && mT.fidelity2 ? "1 = stato previsto identico al vero (k = 1..16)" : "non presente in questo export" },
     { e: `${tm("auroc", "AUROC")} grafo (${tm("gate", "gate")}) a ${tm("T", "T")} = ${Tmax ?? "–"}`, v: mT && mT.auroc_gate != null ? mT.auroc_gate.toFixed(3) : "–", d: "0.5 = caso, 1 = grafo recuperato; atteso > 0.9" },
   ];
@@ -253,6 +253,9 @@ function renderOverview() {
   legend("kstarLegendOv", methodLegend(keys));
   if (keys.length) mk("kstarOv", kstarCfg(ms, keys)); else setEmpty("kstarOv", "Nessun risultato nei dati caricati");
 }
+// k*_rel: last step k with relative error <= thr at every k' <= k (as eval.metrics.k_star)
+function kRel(curve, thr) { const i = curve.findIndex((v) => !(v <= thr)); return i < 0 ? curve.length : i; }
+
 function kstarCfg(ms, keys, f = "k_star") {
   const T = Ts(ms);
   return { type: "line", data: { labels: T.map(String), datasets: keys.map((k) => ({

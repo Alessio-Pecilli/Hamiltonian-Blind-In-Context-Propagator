@@ -27,6 +27,9 @@ case "$WHAT" in
     $G --n 10 --ntraj 500  --L_traj 192 --seed 43 --n_sets 20 --set_seed 43 --out datasets/n10sets/test.h5
     $G --n 10 --ntraj 512  --L_traj 192 --seed 44 --n_sets 64 --set_seed 41 --out datasets/n10sets/test_seen.h5
     ;;
+  groups)  # n=10 TFIM, 2000 Hamiltonians x 4 initial states (pair batches / swap loss); val and test: datasets/n10
+    $G --n 10 --ntraj 8000 --L_traj 161 --seed 71 --n_sets 2000 --set_seed 71 --out datasets/n10grp/train.h5
+    ;;
   mix)  # n=10, six families in turn (tfim, xxz, heisenberg, lr_ising and the chains of the older project): 2000 Hamiltonians
         # each in training; one mixed test file plus one test file per family (new Hamiltonians everywhere)
     M="python -m data.generate --dt 0.1 --workers $W --n 10"

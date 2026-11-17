@@ -20,7 +20,7 @@ import torch
 from config import git_commit, load_config
 from data.dataset import gather_targets, make_loader
 from eval.metrics import evaluate_model
-from losses import total_loss
+from losses import pred_loss, total_loss
 from model.propagator import Propagator, block_rollout, count_parameters
 
 
@@ -111,7 +111,22 @@ def main():
     R = tc.get("rollout_blocks", 0)  # > 0: roll out R blocks of H steps with scheduled sampling
     loader = make_loader(dc["train"], (tc["T_min"], tc["T_max"]), tc["H"] * max(R, 1), tc["anchors"],
                          tc["batch_size"], shuffle=True, num_workers=dc.get("num_workers", 0),
-                         preload=dc.get("preload", True), min_anchor=tc.get("min_anchor", 8))
+                         preload=dc.get("preload", True), min_anchor=tc.get("min_anchor", 8),
+                         pairs=tc.get("pair_batches", False), seed=tc["seed"])
+    lam_swap = cfg["loss"].get("lambda_swap", 0.0)
+    if lam_swap and not tc.get("pair_batches", False):
+        raise ValueError("loss.lambda_swap > 0 needs train.pair_batches=true (and a file made with --n_sets)")
+    pairs = tc.get("pair_batches", False)
+
+    def swap_term(pred, H):
+        """Cross-prediction between the two windows of each pair (same Hamiltonian): window b at its first
+        anchor, with the generator of its partner. Returns (loss term, logs)."""
+        B = pred["hA"].shape[0]
+        partner = torch.arange(B, device=device) ^ 1
+        pn, pe, mis = model.cross_predict(pred, partner, batch["perm"], H)
+        tn, te = gather_targets(dict(node=batch["node"], edge=batch["edge"], anchors=batch["anchors"][:, :1]), H)
+        l = pred_loss(pn, pe, tn[:, 0], te[:, 0], w_edge=float(cfg["loss"].get("w_edge", 1.0)))
+        return lam_swap * l, dict(swap=l.item(), G_mismatch=mis.mean().item())
     logger = Logger(out_dir)
     total = tc["steps"]
     fixed_batch = None
@@ -129,10 +144,15 @@ def main():
                 # probability of feeding back the model's own block, ramped from 0 to rollout_p_max
                 p = tc.get("rollout_p_max", 1.0) * min(1.0, step / max(1, tc.get("rollout_ramp", 0.5) * total))
                 acc = {}
-                for pred, anc in block_rollout(model, batch["node"], batch["edge"], batch["dt"], batch["anchors"],
-                                               batch["T"], tc["H"] * R, tc["H"], p):
+                for r, (pred, anc) in enumerate(block_rollout(model, batch["node"], batch["edge"], batch["dt"],
+                                                              batch["anchors"], batch["T"], tc["H"] * R, tc["H"], p,
+                                                              keep_feats=pairs)):
                     tn, te = gather_targets(dict(node=batch["node"], edge=batch["edge"], anchors=anc), tc["H"])
                     loss, logs = total_loss(pred, batch, tn, te, cfg)
+                    if pairs and r == 0:  # first block only: its context is the true one for every window
+                        ls, sl = swap_term(pred, tc["H"])
+                        loss = loss + R * ls  # / R below: the swap term keeps weight lambda_swap
+                        logs.update({k: v * R for k, v in sl.items()})
                     (loss / R).backward()  # fed-back frames are detached: one graph per block
                     for k, v in logs.items():
                         acc[k] = acc.get(k, 0.0) + v / R
@@ -140,8 +160,12 @@ def main():
             else:
                 H = random.randint(tc.get("H_min", tc["H"]), tc["H"]) if tc.get("var_horizon") else tc["H"]
                 tn, te = gather_targets(batch, H)
-                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H)
+                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H, keep_feats=pairs)
                 loss, logs = total_loss(pred, batch, tn, te, cfg)
+                if pairs:
+                    ls, sl = swap_term(pred, H)
+                    loss = loss + ls
+                    logs.update(sl)
                 loss.backward()
             gn = torch.nn.utils.clip_grad_norm_(model.parameters(), oc["grad_clip"])
             opt.step()
@@ -153,7 +177,8 @@ def main():
                 logger.log(step, logs)
                 print(f"step {step:7d}  loss {logs['loss']:.3e}  pred {logs['pred']:.3e}  "
                       f"phys {logs['phys']:.2e}  probe {logs['probe']:.3f}  "
-                      f"S_F {logs.get('S_F', 0):.3f}  lr {logs['lr']:.2e}", flush=True)
+                      f"S_F {logs.get('S_F', 0):.3f}  lr {logs['lr']:.2e}"
+                      + (f"  swap {logs['swap']:.3e}  G_mis {logs['G_mismatch']:.3f}" if "swap" in logs else ""), flush=True)
             if args.overfit and logs["pred"] < 1e-4:
                 print(f"overfit check PASSED at step {step}: L_pred = {logs['pred']:.2e}")
                 return

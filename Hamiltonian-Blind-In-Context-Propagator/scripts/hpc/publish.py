@@ -74,6 +74,17 @@ for st in (128, 64):
                  f"n10: contesto variabile, previsione sempre dal passo {st} (HPC)",
                  f"Il modello a blocchi da 16 rivalutato con tutti i contesti che finiscono al passo {st} (finestra t0 = {st} - T): separa la lunghezza del contesto dal punto della traiettoria. La traiettoria di esempio parte invece da t = 0."))
     extra[f"n10_small_roll_start{st}"] = dict(BIG, data="datasets/n10/test.h5", block=16, ckpt="runs/n10_small_roll/last.pt")
+jobs.append(("n10_grp_swap", [("n10_grp_base", "n10_grp_base", "coppie, senza perdita di scambio", False),
+                              ("n10_grp_swap", "n10_grp_swap", "coppie, con perdita di scambio", True),
+                              ("n10_small_roll_we4", "n10_small_roll_we4", "8000 hamiltoniane indipendenti", True)],
+             "n10: generatore condiviso tra traiettorie della stessa hamiltoniana (HPC)",
+             "Training su 2000 hamiltoniane TFIM con 4 stati iniziali ciascuna, batch di coppie di traiettorie della stessa hamiltoniana. Con perdita di scambio ogni finestra e prevista anche con il generatore della compagna, cosi il generatore deve dipendere dall'hamiltoniana e non dallo stato. Test su traiettorie singole di hamiltoniane nuove, senza nessuna informazione in piu. Correlatori pesati 4 volte in tutti e tre i run."))
+extra["n10_grp_swap"] = dict(BIG, data="datasets/n10/test.h5", block=16)
+jobs.append(("n10_grp_swap_start128", [("n10_grp_base", "n10_grp_base_start128", "coppie, senza perdita di scambio", False),
+                                       ("n10_grp_swap", "n10_grp_swap_start128", "coppie, con perdita di scambio", True)],
+             "n10: generatore condiviso, previsione sempre dal passo 128 (HPC)",
+             "I due modelli della voce precedente con tutti i contesti che finiscono al passo 128: se il generatore identifica il sistema, l'errore relativo deve scendere al crescere del contesto."))
+extra["n10_grp_swap_start128"] = dict(BIG, data="datasets/n10/test.h5", block=16, ckpt="runs/n10_grp_swap/last.pt")
 os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"

@@ -142,12 +142,17 @@ class GeneratorHead(nn.Module):
         # no tanh (it distorts the quadratic structure); clamp at evaluation only, it would kill gradients in training
         return (node, edge) if self.training else (node.clamp(-1, 1), edge.clamp(-1, 1))
 
-    def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int, o=None):
+    def forward(self, h: torch.Tensor, e: torch.Tensor, dt: torch.Tensor, horizon: int, o=None, G=None):
         """h (N, n, d), e (N, n, n, de), dt (N,) ->
-        node (N, H, n, 3), edge (N, H, n, n, 9) + diagnostics. Runs in float32."""
+        node (N, H, n, 3), edge (N, H, n, n, 9) + diagnostics. Runs in float32.
+        G (N, nm, nm): use this generator instead of the one read from (h, e) (cross-prediction between
+        trajectories of the same system); the latent start z_0 still comes from h."""
         h, e, dt = at_least_fp32(h, e, dt)
         N, n, _ = h.shape
+        G_ext = G
         G, theta, gate, S_F, *diag = self.generator(h, e)
+        if G_ext is not None:
+            G = G_ext.float()
         P = torch.linalg.matrix_exp(dt[:, None, None] * G)
         Z = self.w_z(h).reshape(N, n * self.m)
         if self.quadratic:  # ||Z|| = sqrt(n), conserved by skew G (use_S=false): plays the role of <psi|psi> = 1

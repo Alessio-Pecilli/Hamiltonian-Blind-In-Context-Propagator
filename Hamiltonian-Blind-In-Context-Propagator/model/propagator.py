@@ -45,7 +45,7 @@ class Propagator(nn.Module):
         return nullcontext()
 
     def forward(self, node, edge, dt, anchors, T, horizon: int | None = None,
-                return_attn: bool = False):
+                return_attn: bool = False, keep_feats: bool = False):
         """
         node (B, S, n, 3), edge (B, S, n, n, 9): segments (only positions <= max(T) are read)
         dt (B,), anchors (B, A) context positions for the head, T (B,) last context position.
@@ -82,11 +82,32 @@ class Propagator(nn.Module):
             pred["probe"] = self.probe(h[bidx, T], e[bidx, T])
         if return_attn:
             pred["attn"] = out[2]
+        if keep_feats:  # head inputs at the anchors, for cross_predict
+            pred.update(hA=hA.view(B, A, n, -1), eA=eA.view(B, A, n, n, -1), dt=dt)
         return pred
+
+    def cross_predict(self, pred: dict, partner: torch.Tensor, perm: torch.Tensor, horizon: int):
+        """Predict every window at its first anchor with the generator of another window (partner[b]), whose
+        trajectory comes from the same Hamiltonian. The partner's G is moved to this window's site order
+        (perm[b, s] = original site of site s). Needs pred from forward(..., keep_feats=True).
+        Returns node (B, H, n, 3), edge (B, H, n, n, 9) and the relative generator mismatch (B,)."""
+        B, A, n = pred["hA"].shape[:3]
+        G = pred["G"].view(B, A, *pred["G"].shape[1:])[:, 0]                     # (B, nm, nm)
+        m = G.shape[-1] // n
+        inv = torch.argsort(perm, -1)                                             # inv[b, orig] = site
+        idx = torch.gather(inv[partner], 1, perm)                                 # partner site of site s
+        Gp = G[partner].view(B, n, m, n, m)
+        bi = torch.arange(B, device=G.device)[:, None, None]
+        Gp = Gp.permute(0, 1, 3, 2, 4)[bi, idx[:, :, None], idx[:, None, :]]      # (B, n, n, m, m)
+        Gp = Gp.permute(0, 1, 3, 2, 4).reshape(B, n * m, n * m)
+        o = (pred["node0"][:, 0], pred["edge0"][:, 0]) if self.residual else None
+        res = self.head(pred["hA"][:, 0], pred["eA"][:, 0], pred["dt"], horizon, o, G=Gp)
+        mis = (G - Gp).flatten(1).norm(dim=-1) / G.flatten(1).norm(dim=-1).clamp_min(1e-8)
+        return res["node"], res["edge"], mis
 
 
 def block_rollout(model, node, edge, dt, anchors, T, horizon: int, block: int, p_pred: float = 1.0,
-                  return_attn: bool = False):
+                  return_attn: bool = False, keep_feats: bool = False):
     """Predict `horizon` steps in blocks of `block`: after each block its frames are written into the
     context and the next block is predicted from T + block. Per example, the written frames are the
     model's own (detached) predictions with probability p_pred, else the true ones (scheduled sampling;
@@ -97,7 +118,8 @@ def block_rollout(model, node, edge, dt, anchors, T, horizon: int, block: int, p
     bidx = torch.arange(B, device=T.device)[:, None]
     for r0 in range(0, horizon, block):
         hb = min(block, horizon - r0)
-        pred = model(node, edge, dt, anchors, T, hb, return_attn=return_attn and r0 == 0)
+        pred = model(node, edge, dt, anchors, T, hb, return_attn=return_attn and r0 == 0,
+                     keep_feats=keep_feats and r0 == 0)
         yield pred, anchors
         idx = T[:, None] + torch.arange(1, hb + 1, device=T.device)       # (B, hb)
         own = torch.rand(B, device=T.device) < p_pred

@@ -12,7 +12,7 @@ from __future__ import annotations
 import h5py
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 
 def permute_sites(item: dict, perm: np.ndarray) -> dict:
@@ -120,9 +120,40 @@ def gather_targets(batch: dict, horizon: int) -> tuple[torch.Tensor, torch.Tenso
     return tn, te
 
 
+class PairBatchSampler(Sampler):
+    """Batches of B/2 pairs: items 2p and 2p+1 are two different trajectories of the same parameter set
+    (same Hamiltonian, different initial states; file made with --n_sets). Each item keeps its own random
+    window and site permutation. Sets are drawn at random, without repetition inside a batch."""
+
+    def __init__(self, set_id: np.ndarray, batch_size: int, seed: int = 0):
+        if batch_size % 2:
+            raise ValueError("pair batches need an even batch_size")
+        sid = np.asarray(set_id)
+        self.members = [np.nonzero(sid == s)[0] for s in np.unique(sid[sid >= 0])]
+        self.members = [m for m in self.members if len(m) >= 2]
+        if len(self.members) < batch_size // 2:
+            raise ValueError(f"pair batches need >= {batch_size // 2} parameter sets with 2+ trajectories, "
+                             f"found {len(self.members)} (was the file made with --n_sets?)")
+        self.P, self.n_batches = batch_size // 2, len(sid) // batch_size
+        self.rng = np.random.default_rng(seed)
+
+    def __len__(self):
+        return self.n_batches
+
+    def __iter__(self):
+        for _ in range(self.n_batches):
+            sets = self.rng.choice(len(self.members), self.P, replace=False)
+            yield [int(i) for s in sets for i in self.rng.choice(self.members[s], 2, replace=False)]
+
+
 def make_loader(path, T_range, horizon, anchors, batch_size, shuffle=True, num_workers=0,
-                permute=True, fixed_T=None, fixed_t0=None, preload=True, min_anchor=8):
+                permute=True, fixed_T=None, fixed_t0=None, preload=True, min_anchor=8, pairs=False, seed=0):
     ds = TrajectoryDataset(path, T_range, horizon, anchors, min_anchor=min_anchor, permute=permute,
                            fixed_T=fixed_T, fixed_t0=fixed_t0, preload=preload)
+    if pairs:
+        with h5py.File(path, "r") as f:
+            sid = f["set_id"][()]
+        return DataLoader(ds, batch_sampler=PairBatchSampler(sid, batch_size, seed), num_workers=num_workers,
+                          collate_fn=collate, persistent_workers=num_workers > 0)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
                       collate_fn=collate, drop_last=shuffle, persistent_workers=num_workers > 0)
