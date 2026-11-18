@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224835_n10-training-su-6-famiglie-test-sul-tfim-originale-hpc.json",
+  "latest": "runs/20261118-224841_n10-training-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224841_n10-training-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
+      "label": "n10: training su 6 famiglie, test su TFIM su grafo casuale (HPC)",
+      "generated_at": "2026-11-18T22:48:41",
+      "git_commit": "d9ae5d36b1929a79988688c93ca12d847c4d507d",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: TFIM su grafo casuale (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224835_n10-training-su-6-famiglie-test-sul-tfim-originale-hpc.json",
       "label": "n10: training su 6 famiglie, test sul TFIM originale (HPC)",
