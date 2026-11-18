@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224908_n10-training-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
+  "latest": "runs/20261118-224915_n10-training-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224915_n10-training-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
+      "label": "n10: training su 6 famiglie, test su catena TFIM con J disordinati (vecchio progetto) (HPC)",
+      "generated_at": "2026-11-18T22:49:15",
+      "git_commit": "0f4712ba443ee758264587b42a1c1341901442d0",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: catena TFIM con J disordinati (vecchio progetto) (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224908_n10-training-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
       "label": "n10: training su 6 famiglie, test su catena TFIM uniforme (vecchio progetto) (HPC)",
