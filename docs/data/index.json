@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224848_n10-training-su-6-famiglie-test-su-xxz-su-grafo-casuale-hpc.json",
+  "latest": "runs/20261118-224855_n10-training-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224855_n10-training-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
+      "label": "n10: training su 6 famiglie, test su Heisenberg disordinato (HPC)",
+      "generated_at": "2026-11-18T22:48:55",
+      "git_commit": "0f6198ca0f92c572ecc127695f5252c3d1b731f5",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: Heisenberg disordinato (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224848_n10-training-su-6-famiglie-test-su-xxz-su-grafo-casuale-hpc.json",
       "label": "n10: training su 6 famiglie, test su XXZ su grafo casuale (HPC)",
