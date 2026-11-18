@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261110-152436_n10-training-su-64-hamiltoniane-fisse-test-sulle-stesse-con-stati-nuovi-hpc.json",
+  "latest": "runs/20261118-025836_n10-correlatori-pesati-4-volte-nella-perdita-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-025836_n10-correlatori-pesati-4-volte-nella-perdita-hpc.json",
+      "label": "n10: correlatori pesati 4 volte nella perdita (HPC)",
+      "generated_at": "2026-11-18T02:58:36",
+      "git_commit": "8d607b9ee5e681443d7a11c4187cde9161550947",
+      "notes": "Come il roll out a blocchi da 16, ma l'errore sui correlatori di coppia pesa 4 volte (stessa scala dei termini a un qubit). Sonda lineare di h, J e grafo attiva con stop-gradient: non entra nel modello, misura solo quanto i parametri si leggono dalle feature."
+    },
     {
       "file": "runs/20261110-152436_n10-training-su-64-hamiltoniane-fisse-test-sulle-stesse-con-stati-nuovi-hpc.json",
       "label": "n10: training su 64 hamiltoniane fisse, test sulle stesse con stati nuovi (HPC)",
