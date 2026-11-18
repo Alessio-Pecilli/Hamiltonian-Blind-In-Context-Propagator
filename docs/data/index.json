@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-025836_n10-correlatori-pesati-4-volte-nella-perdita-hpc.json",
+  "latest": "runs/20261118-030010_n10-contesto-variabile-previsione-sempre-dal-passo-128-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-030010_n10-contesto-variabile-previsione-sempre-dal-passo-128-hpc.json",
+      "label": "n10: contesto variabile, previsione sempre dal passo 128 (HPC)",
+      "generated_at": "2026-11-18T03:00:10",
+      "git_commit": "483acf78952679c597cc49f8a6680ad263059c10",
+      "notes": "Il modello a blocchi da 16 rivalutato con tutti i contesti che finiscono al passo 128 (finestra t0 = 128 - T): separa la lunghezza del contesto dal punto della traiettoria. La traiettoria di esempio parte invece da t = 0."
+    },
     {
       "file": "runs/20261118-025836_n10-correlatori-pesati-4-volte-nella-perdita-hpc.json",
       "label": "n10: correlatori pesati 4 volte nella perdita (HPC)",
