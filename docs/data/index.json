@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224841_n10-training-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
+  "latest": "runs/20261118-224848_n10-training-su-6-famiglie-test-su-xxz-su-grafo-casuale-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224848_n10-training-su-6-famiglie-test-su-xxz-su-grafo-casuale-hpc.json",
+      "label": "n10: training su 6 famiglie, test su XXZ su grafo casuale (HPC)",
+      "generated_at": "2026-11-18T22:48:48",
+      "git_commit": "742aba6f7d126328b3f5154323d8e926bf359901",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: XXZ su grafo casuale (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224841_n10-training-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
       "label": "n10: training su 6 famiglie, test su TFIM su grafo casuale (HPC)",
