@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224723_n10-training-su-6-famiglie-di-hamiltoniane-test-misto-hpc.json",
+  "latest": "runs/20261118-224835_n10-training-su-6-famiglie-test-sul-tfim-originale-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224835_n10-training-su-6-famiglie-test-sul-tfim-originale-hpc.json",
+      "label": "n10: training su 6 famiglie, test sul TFIM originale (HPC)",
+      "generated_at": "2026-11-18T22:48:35",
+      "git_commit": "5331f54f57a8b0392fcfe193883e40118a9c6f1a",
+      "notes": "Il modello addestrato sulle sei famiglie valutato sul test TFIM delle voci precedenti: quanto costa la varieta sul caso di partenza."
+    },
     {
       "file": "runs/20261118-224723_n10-training-su-6-famiglie-di-hamiltoniane-test-misto-hpc.json",
       "label": "n10: training su 6 famiglie di hamiltoniane, test misto (HPC)",
