@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-030010_n10-contesto-variabile-previsione-sempre-dal-passo-128-hpc.json",
+  "latest": "runs/20261118-030016_n10-contesto-variabile-previsione-sempre-dal-passo-64-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-030016_n10-contesto-variabile-previsione-sempre-dal-passo-64-hpc.json",
+      "label": "n10: contesto variabile, previsione sempre dal passo 64 (HPC)",
+      "generated_at": "2026-11-18T03:00:16",
+      "git_commit": "4d282405c72a9b07956dad896d36e0153e15fa0c",
+      "notes": "Il modello a blocchi da 16 rivalutato con tutti i contesti che finiscono al passo 64 (finestra t0 = 64 - T): separa la lunghezza del contesto dal punto della traiettoria. La traiettoria di esempio parte invece da t = 0."
+    },
     {
       "file": "runs/20261118-030010_n10-contesto-variabile-previsione-sempre-dal-passo-128-hpc.json",
       "label": "n10: contesto variabile, previsione sempre dal passo 128 (HPC)",
