@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224915_n10-training-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
+  "latest": "runs/20261118-224922_n10-generatore-condiviso-tra-traiettorie-della-stessa-hamiltoniana-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224922_n10-generatore-condiviso-tra-traiettorie-della-stessa-hamiltoniana-hpc.json",
+      "label": "n10: generatore condiviso tra traiettorie della stessa hamiltoniana (HPC)",
+      "generated_at": "2026-11-18T22:49:22",
+      "git_commit": "7b8d71234beb0fede3d46c12a1f0366a3ea29184",
+      "notes": "Training su 2000 hamiltoniane TFIM con 4 stati iniziali ciascuna, batch di coppie di traiettorie della stessa hamiltoniana. Con perdita di scambio ogni finestra e prevista anche con il generatore della compagna, cosi il generatore deve dipendere dall'hamiltoniana e non dallo stato. Test su traiettorie singole di hamiltoniane nuove, senza nessuna informazione in piu. Correlatori pesati 4 volte in tutti e tre i run."
+    },
     {
       "file": "runs/20261118-224915_n10-training-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
       "label": "n10: training su 6 famiglie, test su catena TFIM con J disordinati (vecchio progetto) (HPC)",
