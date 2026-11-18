@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224902_n10-training-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
+  "latest": "runs/20261118-224908_n10-training-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224908_n10-training-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
+      "label": "n10: training su 6 famiglie, test su catena TFIM uniforme (vecchio progetto) (HPC)",
+      "generated_at": "2026-11-18T22:49:08",
+      "git_commit": "6cc487f8d31a3532ead67ea066f696cb00d36ece",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: catena TFIM uniforme (vecchio progetto) (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224902_n10-training-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
       "label": "n10: training su 6 famiglie, test su Ising a lungo raggio (HPC)",
