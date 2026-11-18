@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224922_n10-generatore-condiviso-tra-traiettorie-della-stessa-hamiltoniana-hpc.json",
+  "latest": "runs/20261118-224929_n10-generatore-condiviso-previsione-sempre-dal-passo-128-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224929_n10-generatore-condiviso-previsione-sempre-dal-passo-128-hpc.json",
+      "label": "n10: generatore condiviso, previsione sempre dal passo 128 (HPC)",
+      "generated_at": "2026-11-18T22:49:29",
+      "git_commit": "bcd0ad13ad505fc525ae994487375392c542641d",
+      "notes": "I due modelli della voce precedente con tutti i contesti che finiscono al passo 128: se il generatore identifica il sistema, l'errore relativo deve scendere al crescere del contesto."
+    },
     {
       "file": "runs/20261118-224922_n10-generatore-condiviso-tra-traiettorie-della-stessa-hamiltoniana-hpc.json",
       "label": "n10: generatore condiviso tra traiettorie della stessa hamiltoniana (HPC)",
