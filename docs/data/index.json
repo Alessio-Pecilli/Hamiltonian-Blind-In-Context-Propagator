@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224855_n10-training-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
+  "latest": "runs/20261118-224902_n10-training-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224902_n10-training-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
+      "label": "n10: training su 6 famiglie, test su Ising a lungo raggio (HPC)",
+      "generated_at": "2026-11-18T22:49:02",
+      "git_commit": "16243ce5b62568fb22982f85ce469bdcbdcab472",
+      "notes": "Come la voce del test misto, ma il test contiene solo la famiglia: Ising a lungo raggio (300 hamiltoniane nuove)."
+    },
     {
       "file": "runs/20261118-224855_n10-training-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
       "label": "n10: training su 6 famiglie, test su Heisenberg disordinato (HPC)",
