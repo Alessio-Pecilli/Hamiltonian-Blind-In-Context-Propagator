@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-030016_n10-contesto-variabile-previsione-sempre-dal-passo-64-hpc.json",
+  "latest": "runs/20261118-224723_n10-training-su-6-famiglie-di-hamiltoniane-test-misto-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261118-224723_n10-training-su-6-famiglie-di-hamiltoniane-test-misto-hpc.json",
+      "label": "n10: training su 6 famiglie di hamiltoniane, test misto (HPC)",
+      "generated_at": "2026-11-18T22:47:23",
+      "git_commit": "2d865f378d685c2bf14fa7acce03ff6c740b3553",
+      "notes": "n=10 qubit, modello piccolo, roll out a blocchi da 16. Training su 12000 hamiltoniane di sei famiglie (2000 ciascuna): TFIM, XXZ e Heisenberg disordinato su grafo casuale, Ising a lungo raggio, catene TFIM aperte del vecchio progetto (uniforme e con J disordinati). Test su 600 hamiltoniane nuove delle stesse famiglie. Confronto con il modello addestrato solo su TFIM e con DMD."
+    },
     {
       "file": "runs/20261118-030016_n10-contesto-variabile-previsione-sempre-dal-passo-64-hpc.json",
       "label": "n10: contesto variabile, previsione sempre dal passo 64 (HPC)",
