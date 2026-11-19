@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261118-224929_n10-generatore-condiviso-previsione-sempre-dal-passo-128-hpc.json",
+  "latest": "runs/20261119-212636_n10-errore-sul-training-contro-errore-sul-test-peso-correlatori-1-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261119-212636_n10-errore-sul-training-contro-errore-sul-test-peso-correlatori-1-hpc.json",
+      "label": "n10: errore sul training contro errore sul test, peso correlatori 1 (HPC)",
+      "generated_at": "2026-11-19T21:26:36",
+      "git_commit": "502932b8d00b4a8d4ce24c9bee6ea71b3727a9c0",
+      "notes": "Lo stesso modello valutato su 500 traiettorie del training e sul test (contesto fino a 64: le traiettorie di training sono lunghe 161). Se l'errore sui correlatori e alto anche sul training, il limite e di ottimizzazione o di capacita, non di generalizzazione."
+    },
     {
       "file": "runs/20261118-224929_n10-generatore-condiviso-previsione-sempre-dal-passo-128-hpc.json",
       "label": "n10: generatore condiviso, previsione sempre dal passo 128 (HPC)",
