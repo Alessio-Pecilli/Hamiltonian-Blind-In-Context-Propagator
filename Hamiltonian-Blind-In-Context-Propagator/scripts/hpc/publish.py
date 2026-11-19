@@ -98,6 +98,15 @@ for fam, desc in FAMS.items():
                  f"Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane {desc} del dataset misto; "
                  "confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."))
     extra[f"n10_fam_{fam}"] = dict(base=["persistence", "dmd", "dmd4"], block=16, data=f"datasets/n10mix/test_{fam}.h5")
+jobs.append(("n10_grp_pool4_k8", [("n10_grp_pool4", "n10_grp_pool4", "media su 4 in training, test su 1 traiettoria", False)]
+             + [("n10_grp_pool4", f"n10_grp_pool4_k{k}", f"media su 4 in training, test con media su {k}", True) for k in (2, 4, 8)]
+             + [("n10_grp_base", f"n10_grp_base_k{k}", f"senza media in training, test con media su {k}", True) for k in (1, 4)],
+             "n10: generatore medio su piu traiettorie della stessa hamiltoniana, in training e in test (HPC)",
+             "Training su 2000 hamiltoniane TFIM con 4 stati iniziali ciascuna, a gruppi di 4 traiettorie della stessa hamiltoniana: "
+             "ogni traiettoria e prevista con la media dei generatori del gruppo. In test si danno al modello K traiettorie della "
+             "stessa hamiltoniana nuova (K = 1, 2, 4, 8; 20 hamiltoniane con 25 stati ciascuna) e ognuna e prevista con il generatore "
+             "medio. Confronto: il modello addestrato a coppie senza media, con la media solo in test."))
+extra["n10_grp_pool4_k8"] = dict(BIG, data="datasets/n10sets/test.h5", block=16, ckpt="runs/n10_grp_pool4/last.pt")
 os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"

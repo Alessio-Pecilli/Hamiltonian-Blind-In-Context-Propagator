@@ -109,14 +109,19 @@ def main():
         model.load_state_dict(ck["model"]); opt.load_state_dict(ck["opt"]); step = ck["step"]
 
     R = tc.get("rollout_blocks", 0)  # > 0: roll out R blocks of H steps with scheduled sampling
+    K = tc.get("group", 1)  # > 1: groups of K trajectories of one Hamiltonian, each predicted with the group's mean G
+    pairs = tc.get("pair_batches", False) or K > 1
+    if K > 1 and cfg["loss"].get("lambda_swap", 0.0):
+        raise ValueError("train.group > 1 and loss.lambda_swap are alternatives (the pooled G is shared already)")
     loader = make_loader(dc["train"], (tc["T_min"], tc["T_max"]), tc["H"] * max(R, 1), tc["anchors"],
                          tc["batch_size"], shuffle=True, num_workers=dc.get("num_workers", 0),
                          preload=dc.get("preload", True), min_anchor=tc.get("min_anchor", 8),
-                         pairs=tc.get("pair_batches", False), seed=tc["seed"])
+                         group=max(K, 2) if pairs else 0, seed=tc["seed"])
     lam_swap = cfg["loss"].get("lambda_swap", 0.0)
     if lam_swap and not tc.get("pair_batches", False):
         raise ValueError("loss.lambda_swap > 0 needs train.pair_batches=true (and a file made with --n_sets)")
-    pairs = tc.get("pair_batches", False)
+    gk = dict(group=K, perm=None) if K > 1 else {}
+    swap = pairs and K == 1  # pair batches: swap term (logged also with lambda_swap = 0, as a control)
 
     def swap_term(pred, H):
         """Cross-prediction between the two windows of each pair (same Hamiltonian): window b at its first
@@ -140,16 +145,18 @@ def main():
             for g in opt.param_groups:
                 g["lr"] = lr_at(step, oc, total)
             opt.zero_grad(set_to_none=True)
+            if K > 1:
+                gk["perm"] = batch["perm"]
             if R:
                 # probability of feeding back the model's own block, ramped from 0 to rollout_p_max
                 p = tc.get("rollout_p_max", 1.0) * min(1.0, step / max(1, tc.get("rollout_ramp", 0.5) * total))
                 acc = {}
                 for r, (pred, anc) in enumerate(block_rollout(model, batch["node"], batch["edge"], batch["dt"],
                                                               batch["anchors"], batch["T"], tc["H"] * R, tc["H"], p,
-                                                              keep_feats=pairs)):
+                                                              keep_feats=swap, **gk)):
                     tn, te = gather_targets(dict(node=batch["node"], edge=batch["edge"], anchors=anc), tc["H"])
                     loss, logs = total_loss(pred, batch, tn, te, cfg)
-                    if pairs and r == 0:  # first block only: its context is the true one for every window
+                    if swap and r == 0:  # first block only: its context is the true one for every window
                         ls, sl = swap_term(pred, tc["H"])
                         loss = loss + R * ls  # / R below: the swap term keeps weight lambda_swap
                         logs.update({k: v * R for k, v in sl.items()})
@@ -160,9 +167,9 @@ def main():
             else:
                 H = random.randint(tc.get("H_min", tc["H"]), tc["H"]) if tc.get("var_horizon") else tc["H"]
                 tn, te = gather_targets(batch, H)
-                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H, keep_feats=pairs)
+                pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"], H, keep_feats=swap, **gk)
                 loss, logs = total_loss(pred, batch, tn, te, cfg)
-                if pairs:
+                if swap:
                     ls, sl = swap_term(pred, H)
                     loss = loss + ls
                     logs.update(sl)

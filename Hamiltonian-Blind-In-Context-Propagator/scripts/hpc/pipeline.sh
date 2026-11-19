@@ -33,6 +33,10 @@
 #      on the correlators above all (optimisation/capacity limit if the train error is as high as the test one).
 #   Y  n10_fam_<family>: as M, but one model per family, trained on that family only (its 2000 Hamiltonians from the
 #      mixed file) and tested on it; compared with the mixed model of M on the same test files.
+#   Z  n10_grp_pool4: as Q, on the same 2000 Hamiltonians x 4 states, but in groups of 4 trajectories of one Hamiltonian
+#      and every window predicted with the MEAN generator of its group (train.group=4), at test too (--group K): tested
+#      on 20 new Hamiltonians x 25 states (datasets/n10sets/test.h5) with K = 1, 2, 4, 8 trajectories per group; the
+#      pair model of Q without pooling (n10_grp_base) evaluated the same way (pooling at test time only).
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -47,10 +51,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}; STEPS_Y=${STEPS_Y:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}; STEPS_Y=${STEPS_Y:-10}; STEPS_Z=${STEPS_Z:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}; STEPS_Y=${STEPS_Y:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}; STEPS_Y=${STEPS_Y:-40000}; STEPS_Z=${STEPS_Z:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -248,6 +252,19 @@ for s in $STAGES; do
         EVX=(--block 16)
         stage n10_fam_$f hpc "$STEPS_Y" datasets/n10mix/test_$f.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}" \
           train.H=16 train.rollout_blocks=4 train.T_max=96 data.train=datasets/n10fam/$f/train.h5 data.val=datasets/n10fam/$f/val.h5 data.test=datasets/n10mix/test_$f.h5
+      done
+      EVX=() ;;
+    Z)
+      n10data || { fail "n10 datasets"; continue; }
+      [ -f datasets/n10grp/.ok ] || make_data groups datasets/n10grp "$W" || { fail "n10grp datasets"; continue; }
+      [ -f datasets/n10sets/.ok ] || make_data sets datasets/n10sets "$W" || { fail "n10sets datasets"; continue; }
+      EVX=(--block 16)
+      stage n10_grp_pool4 hpc "$STEPS_Z" datasets/n10sets/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}" \
+        train.H=16 train.rollout_blocks=4 train.T_max=96 data.train=datasets/n10grp/train.h5 train.group=4
+      for r in n10_grp_pool4 n10_grp_base; do
+        [ -f runs/$r/last.pt ] || continue
+        [ $r = n10_grp_base ] && { EVX=(--block 16); reeval $r ${r}_k1 datasets/n10sets/test.h5 "8 16 32 64 128" ""; }
+        for k in 2 4 8; do EVX=(--block 16 --group $k); reeval $r ${r}_k$k datasets/n10sets/test.h5 "8 16 32 64 128" ""; done
       done
       EVX=() ;;
     E)

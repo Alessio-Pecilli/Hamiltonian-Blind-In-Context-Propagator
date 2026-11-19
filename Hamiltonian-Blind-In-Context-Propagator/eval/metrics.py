@@ -171,10 +171,12 @@ def upper_pairs(x: np.ndarray) -> np.ndarray:
 @torch.no_grad()
 def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: int = 16,
                    max_batches: int | None = None, t0: int = 0, graph: bool = True,
-                   num_workers: int = 0, block: int | None = None) -> dict:
+                   num_workers: int = 0, block: int | None = None, group: int = 1) -> dict:
     """Evaluate from the last context position, sweeping T. horizon may exceed the training H
     for Head A (generator extrapolation); it is clipped to what the stored trajectories allow.
-    block: roll out in blocks of this many steps, feeding the predictions back as context."""
+    block: roll out in blocks of this many steps, feeding the predictions back as context.
+    group > 1: the file holds several trajectories per Hamiltonian (--n_sets); they are taken in groups of `group`
+    and every trajectory is predicted with the mean generator of its group (the remainder of each set is dropped)."""
     model.eval()
     results = {}
     for T in T_list:
@@ -186,7 +188,7 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
         if Hk < 1:
             continue
         loader = make_loader(path, (T, T), Hk, 1, batch_size, shuffle=False, permute=False,
-                             fixed_T=T, fixed_t0=t0, num_workers=num_workers)
+                             fixed_T=T, fixed_t0=t0, num_workers=num_workers, group=group if group > 1 else 0)
         rn_all, re_all, fid_all, gate, attn, adj, J, h = [], [], [], [], [], [], [], []
         rel = RelMetrics()
         pJ, ph, padj, S_F, Gn = [], [], [], [], []
@@ -199,14 +201,15 @@ def evaluate_model(model, path: str, T_list, horizon: int, device, batch_size: i
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t_start = time.perf_counter()
+            gk = dict(group=group, perm=batch["perm"]) if group > 1 else {}
             if block:
                 parts = [p for p, _ in block_rollout(model, batch["node"], batch["edge"], batch["dt"], batch["anchors"],
-                                                     batch["T"], Hk, block, return_attn=graph)]
+                                                     batch["T"], Hk, block, return_attn=graph, **gk)]
                 pred = dict(parts[0], node=torch.cat([p["node"] for p in parts], 2),
                             edge=torch.cat([p["edge"] for p in parts], 2))
             else:
                 pred = model(batch["node"], batch["edge"], batch["dt"], batch["anchors"], batch["T"],
-                             horizon=Hk, return_attn=graph)
+                             horizon=Hk, return_attn=graph, **gk)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t_model += time.perf_counter() - t_start

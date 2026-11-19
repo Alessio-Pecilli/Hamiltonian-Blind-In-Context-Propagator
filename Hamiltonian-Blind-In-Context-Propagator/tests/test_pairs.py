@@ -48,3 +48,40 @@ def test_cross_predict_permutation(tiny_cfg):
         both["G"] = torch.cat([pred["G"], other["G"]])
         pn2, _, mis2 = model.cross_predict(both, torch.tensor([2, 3, 0, 1]), torch.cat([P, P]), 6)
     assert mis2.min() > 1e-3 and not torch.allclose(pn2[0], pred["node"][0, 0])
+
+
+def test_group_pooling(tiny_cfg):
+    """group=2 on a window and its site-permuted copy: both generators are the same once aligned, so the pooled
+    prediction equals the plain one; with two different windows each one gets the mean of the two (aligned) G."""
+    from model.propagator import pool_generator
+    tiny_cfg["model"]["residual"] = True
+    model = make_model(tiny_cfg).double().eval()
+    node, edge, dt = (x.double() for x in random_inputs(2, 16, 5))
+    perm = np.array([3, 0, 4, 1, 2])
+    item = permute_sites(dict(node=node[0].numpy(), edge=edge[0].numpy(), adj=np.zeros((5, 5)),
+                              J=np.zeros((5, 5)), h=np.zeros(5)), perm)
+    node2 = torch.stack([node[0], torch.from_numpy(item["node"])])
+    edge2 = torch.stack([edge[0], torch.from_numpy(item["edge"])])
+    T = torch.tensor([12, 12])
+    P = torch.tensor(np.stack([np.arange(5), perm]))
+    with torch.no_grad():
+        plain = model(node2, edge2, dt, T[:, None], T, 6)
+        pooled = model(node2, edge2, dt, T[:, None], T, 6, group=2, perm=P)
+    assert torch.allclose(pooled["node"], plain["node"], atol=1e-10) and torch.allclose(pooled["edge"], plain["edge"], atol=1e-10)
+    # two different windows, identity order: the pooled G is the plain mean, and it changes the prediction
+    I = torch.arange(5).repeat(2, 1)
+    with torch.no_grad():
+        plain = model(node, edge, dt, T[:, None], T, 6)
+        pooled = model(node, edge, dt, T[:, None], T, 6, group=2, perm=I)
+    assert torch.allclose(pooled["G"], plain["G"].mean(0, keepdim=True).expand(2, -1, -1), atol=1e-12)
+    assert not torch.allclose(pooled["node"], plain["node"])
+    assert torch.equal(pool_generator(plain["G"], I, 1), plain["G"])
+
+
+def test_group_batches():
+    from data.dataset import group_batches
+    sid = np.array([0, 1, 0, 1, 0, 1, 0, 2, 0])          # set 0: 5 trajectories, set 1: 3, set 2: 1
+    b = group_batches(sid, 2, 4)
+    flat = [i for x in b for i in x]
+    assert b == [[0, 2, 4, 6], [1, 3]] and len(set(flat)) == len(flat)
+    assert all(sid[g[0]] == sid[g[1]] for x in b for g in (x[:2], x[2:]) if g)

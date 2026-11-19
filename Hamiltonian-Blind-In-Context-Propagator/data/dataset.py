@@ -121,20 +121,20 @@ def gather_targets(batch: dict, horizon: int) -> tuple[torch.Tensor, torch.Tenso
 
 
 class PairBatchSampler(Sampler):
-    """Batches of B/2 pairs: items 2p and 2p+1 are two different trajectories of the same parameter set
-    (same Hamiltonian, different initial states; file made with --n_sets). Each item keeps its own random
-    window and site permutation. Sets are drawn at random, without repetition inside a batch."""
+    """Batches of B/k groups (default k=2, pairs): items kp ... kp+k-1 are k different trajectories of the same
+    parameter set (same Hamiltonian, different initial states; file made with --n_sets). Each item keeps its own
+    random window and site permutation. Sets are drawn at random, without repetition inside a batch."""
 
-    def __init__(self, set_id: np.ndarray, batch_size: int, seed: int = 0):
-        if batch_size % 2:
-            raise ValueError("pair batches need an even batch_size")
+    def __init__(self, set_id: np.ndarray, batch_size: int, seed: int = 0, k: int = 2):
+        if batch_size % k:
+            raise ValueError(f"group batches need a batch_size divisible by {k}")
         sid = np.asarray(set_id)
         self.members = [np.nonzero(sid == s)[0] for s in np.unique(sid[sid >= 0])]
-        self.members = [m for m in self.members if len(m) >= 2]
-        if len(self.members) < batch_size // 2:
-            raise ValueError(f"pair batches need >= {batch_size // 2} parameter sets with 2+ trajectories, "
+        self.members = [m for m in self.members if len(m) >= k]
+        if len(self.members) < batch_size // k:
+            raise ValueError(f"group batches need >= {batch_size // k} parameter sets with {k}+ trajectories, "
                              f"found {len(self.members)} (was the file made with --n_sets?)")
-        self.P, self.n_batches = batch_size // 2, len(sid) // batch_size
+        self.k, self.P, self.n_batches = k, batch_size // k, len(sid) // batch_size
         self.rng = np.random.default_rng(seed)
 
     def __len__(self):
@@ -143,17 +143,32 @@ class PairBatchSampler(Sampler):
     def __iter__(self):
         for _ in range(self.n_batches):
             sets = self.rng.choice(len(self.members), self.P, replace=False)
-            yield [int(i) for s in sets for i in self.rng.choice(self.members[s], 2, replace=False)]
+            yield [int(i) for s in sets for i in self.rng.choice(self.members[s], self.k, replace=False)]
+
+
+def group_batches(set_id: np.ndarray, k: int, batch_size: int) -> list[list[int]]:
+    """Deterministic batches for evaluation: every parameter set split into consecutive groups of k trajectories
+    (the remainder is dropped), batch_size // k groups per batch."""
+    sid = np.asarray(set_id)
+    groups = [m[i:i + k] for s in np.unique(sid[sid >= 0]) for m in [np.nonzero(sid == s)[0]]
+              for i in range(0, len(m) - k + 1, k)]
+    if not groups:
+        raise ValueError(f"no parameter set with {k}+ trajectories (was the file made with --n_sets?)")
+    per = max(batch_size // k, 1)
+    return [[int(i) for g in groups[j:j + per] for i in g] for j in range(0, len(groups), per)]
 
 
 def make_loader(path, T_range, horizon, anchors, batch_size, shuffle=True, num_workers=0,
-                permute=True, fixed_T=None, fixed_t0=None, preload=True, min_anchor=8, pairs=False, seed=0):
+                permute=True, fixed_T=None, fixed_t0=None, preload=True, min_anchor=8, group=0, seed=0):
+    """group >= 2: batches of groups of `group` trajectories of the same Hamiltonian (random in training,
+    deterministic with shuffle=False)."""
     ds = TrajectoryDataset(path, T_range, horizon, anchors, min_anchor=min_anchor, permute=permute,
                            fixed_T=fixed_T, fixed_t0=fixed_t0, preload=preload)
-    if pairs:
+    if group >= 2:
         with h5py.File(path, "r") as f:
             sid = f["set_id"][()]
-        return DataLoader(ds, batch_sampler=PairBatchSampler(sid, batch_size, seed), num_workers=num_workers,
+        bs = PairBatchSampler(sid, batch_size, seed, group) if shuffle else group_batches(sid, group, batch_size)
+        return DataLoader(ds, batch_sampler=bs, num_workers=num_workers,
                           collate_fn=collate, persistent_workers=num_workers > 0)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
                       collate_fn=collate, drop_last=shuffle, persistent_workers=num_workers > 0)

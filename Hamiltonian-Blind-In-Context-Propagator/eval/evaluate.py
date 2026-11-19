@@ -67,6 +67,9 @@ def main():
     ap.add_argument("--start", type=int, default=None,
                     help="fixed prediction start: every context T ends at this step (window t0 = start - T), so that T "
                          "is compared at the same point of the trajectory instead of at t0 = 0")
+    ap.add_argument("--group", type=int, default=1,
+                    help="predict every trajectory with the mean generator of a group of this many trajectories of the "
+                         "same Hamiltonian (file made with --n_sets)")
     ap.add_argument("--out", default="results")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
@@ -79,7 +82,7 @@ def main():
         mb = None if a.max_traj is None else -(-a.max_traj // a.batch_size)
         res = {}
         for T, t0 in t0s.items():
-            res.update(evaluate_model(model, a.data, [T], a.horizon, device, a.batch_size, max_batches=mb, block=a.block, t0=t0))
+            res.update(evaluate_model(model, a.data, [T], a.horizon, device, a.batch_size, max_batches=mb, block=a.block, t0=t0, group=a.group))
         results[f"model({model.head_type})"] = res
         for T, r in res.items():
             print(f"  model        T={T:4d}  rmse_n(1)={r['rmse_n'][0]:.4f}  rmse_n(H)={r['rmse_n'][-1]:.4f}  "

@@ -152,7 +152,7 @@ class GeneratorHead(nn.Module):
         G_ext = G
         G, theta, gate, S_F, *diag = self.generator(h, e)
         if G_ext is not None:
-            G = G_ext.float()
+            G = G_ext.to(G.dtype)
         P = torch.linalg.matrix_exp(dt[:, None, None] * G)
         Z = self.w_z(h).reshape(N, n * self.m)
         if self.quadratic:  # ||Z|| = sqrt(n), conserved by skew G (use_S=false): plays the role of <psi|psi> = 1

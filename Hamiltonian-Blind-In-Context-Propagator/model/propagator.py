@@ -45,10 +45,12 @@ class Propagator(nn.Module):
         return nullcontext()
 
     def forward(self, node, edge, dt, anchors, T, horizon: int | None = None,
-                return_attn: bool = False, keep_feats: bool = False):
+                return_attn: bool = False, keep_feats: bool = False, group: int = 1, perm=None):
         """
         node (B, S, n, 3), edge (B, S, n, n, 9): segments (only positions <= max(T) are read)
         dt (B,), anchors (B, A) context positions for the head, T (B,) last context position.
+        group > 1: the windows come in consecutive groups of `group` trajectories of the same Hamiltonian
+        (site order perm (B, n)); every window is predicted with the mean generator of its group.
         Returns predictions of shape (B, A, H, n, 3) / (B, A, H, n, n, 9) and diagnostics.
         """
         horizon = horizon or self.horizon
@@ -67,7 +69,13 @@ class Propagator(nn.Module):
         if self.residual:  # observed frame at each anchor
             o = (node[bidx[:, None], anchors].reshape(B * A, n, 3),
                  edge[bidx[:, None], anchors].reshape(B * A, n, n, 9))
-        res = self.head(hA, eA, dtA, horizon, o) if self.residual else self.head(hA, eA, dtA, horizon)
+        G = None
+        if group > 1:
+            if self.head_type != "A":
+                raise ValueError("group > 1 needs head A")
+            G = self.head.generator(hA, eA)[0].view(B, A, *2 * [hA.shape[1] * self.head.m])
+            G = torch.stack([pool_generator(G[:, a], perm, group) for a in range(A)], 1).flatten(0, 1)
+        res = self.head(hA, eA, dtA, horizon, o, G=G) if self.head_type == "A" else self.head(hA, eA, dtA, horizon)
         pred = dict(
             node0=node[bidx[:, None], anchors], edge0=edge[bidx[:, None], anchors],  # observed at the anchor
             node=res["node"].view(B, A, horizon, n, 3),
@@ -106,20 +114,33 @@ class Propagator(nn.Module):
         return res["node"], res["edge"], mis
 
 
+def pool_generator(G: torch.Tensor, perm: torch.Tensor, k: int) -> torch.Tensor:
+    """G (B, nm, nm) of windows in consecutive groups of k trajectories of the same Hamiltonian, perm (B, n)
+    (perm[b, s] = original site of site s) -> the group's mean generator, in each window's own site order."""
+    B, nm, _ = G.shape
+    n = perm.shape[1]
+    m = nm // n
+    bi = torch.arange(B, device=G.device)[:, None, None]
+    inv = torch.argsort(perm, -1)                                             # inv[b, orig] = site
+    Go = G.view(B, n, m, n, m).permute(0, 1, 3, 2, 4)[bi, inv[:, :, None], inv[:, None, :]]  # original order
+    Go = Go.reshape(B // k, k, n, n, m, m).mean(1).repeat_interleave(k, 0)
+    return Go[bi, perm[:, :, None], perm[:, None, :]].permute(0, 1, 3, 2, 4).reshape(B, nm, nm)
+
+
 def block_rollout(model, node, edge, dt, anchors, T, horizon: int, block: int, p_pred: float = 1.0,
-                  return_attn: bool = False, keep_feats: bool = False):
+                  return_attn: bool = False, keep_feats: bool = False, **kw):
     """Predict `horizon` steps in blocks of `block`: after each block its frames are written into the
     context and the next block is predicted from T + block. Per example, the written frames are the
     model's own (detached) predictions with probability p_pred, else the true ones (scheduled sampling;
     p_pred = 1 is the free roll out used at test time). node/edge must hold the true frames up to T + horizon.
-    Yields (pred, anchors) per block; anchors[:, 0] must be T (true for the dataset windows)."""
+    kw (group, perm) go to every model call. Yields (pred, anchors) per block; anchors[:, 0] must be T (true for the dataset windows)."""
     node, edge, T = node.clone(), edge.clone(), T.clone()
     B = T.shape[0]
     bidx = torch.arange(B, device=T.device)[:, None]
     for r0 in range(0, horizon, block):
         hb = min(block, horizon - r0)
         pred = model(node, edge, dt, anchors, T, hb, return_attn=return_attn and r0 == 0,
-                     keep_feats=keep_feats and r0 == 0)
+                     keep_feats=keep_feats and r0 == 0, **kw)
         yield pred, anchors
         idx = T[:, None] + torch.arange(1, hb + 1, device=T.device)       # (B, hb)
         own = torch.rand(B, device=T.device) < p_pred
