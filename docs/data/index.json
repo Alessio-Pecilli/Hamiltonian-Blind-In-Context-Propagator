@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261119-212750_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
+  "latest": "runs/20261119-212800_n10-generatore-medio-su-piu-traiettorie-della-stessa-hamiltoniana-in-training-e-in-test-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261119-212800_n10-generatore-medio-su-piu-traiettorie-della-stessa-hamiltoniana-in-training-e-in-test-hpc.json",
+      "label": "n10: generatore medio su piu traiettorie della stessa hamiltoniana, in training e in test (HPC)",
+      "generated_at": "2026-11-19T21:28:00",
+      "git_commit": "6c340872808dc3e8e381c735bf609a53b0a37659",
+      "notes": "Training su 2000 hamiltoniane TFIM con 4 stati iniziali ciascuna, a gruppi di 4 traiettorie della stessa hamiltoniana: ogni traiettoria e prevista con la media dei generatori del gruppo. In test si danno al modello K traiettorie della stessa hamiltoniana nuova (K = 1, 2, 4, 8; 20 hamiltoniane con 25 stati ciascuna) e ognuna e prevista con il generatore medio. Confronto: il modello addestrato a coppie senza media, con la media solo in test."
+    },
     {
       "file": "runs/20261119-212750_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
       "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su TFIM su grafo casuale (HPC)",
