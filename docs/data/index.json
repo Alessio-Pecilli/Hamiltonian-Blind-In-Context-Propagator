@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261119-212743_n10-errore-sul-training-contro-errore-sul-test-peso-correlatori-4-hpc.json",
+  "latest": "runs/20261119-212750_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261119-212750_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-tfim-su-grafo-casuale-hpc.json",
+      "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su TFIM su grafo casuale (HPC)",
+      "generated_at": "2026-11-19T21:27:50",
+      "git_commit": "38dcca261943013c5d4d5fb836d40dc735c66d8c",
+      "notes": "Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane TFIM su grafo casuale del dataset misto; confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."
+    },
     {
       "file": "runs/20261119-212743_n10-errore-sul-training-contro-errore-sul-test-peso-correlatori-4-hpc.json",
       "label": "n10: errore sul training contro errore sul test, peso correlatori 4 (HPC)",
