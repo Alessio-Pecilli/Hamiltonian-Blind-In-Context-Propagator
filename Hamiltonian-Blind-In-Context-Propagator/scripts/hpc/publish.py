@@ -85,6 +85,19 @@ jobs.append(("n10_grp_swap_start128", [("n10_grp_base", "n10_grp_base_start128",
              "n10: generatore condiviso, previsione sempre dal passo 128 (HPC)",
              "I due modelli della voce precedente con tutti i contesti che finiscono al passo 128: se il generatore identifica il sistema, l'errore relativo deve scendere al crescere del contesto."))
 extra["n10_grp_swap_start128"] = dict(BIG, data="datasets/n10/test.h5", block=16, ckpt="runs/n10_grp_swap/last.pt")
+for r, w in (("n10_small_roll", "peso correlatori 1"), ("n10_small_roll_we4", "peso correlatori 4")):
+    jobs.append((f"{r}_on_train", [(r, r, "test: hamiltoniane nuove", False), (r, f"{r}_on_train", "training: traiettorie gia viste", True)],
+                 f"n10: errore sul training contro errore sul test, {w} (HPC)",
+                 "Lo stesso modello valutato su 500 traiettorie del training e sul test (contesto fino a 64: le traiettorie di training sono lunghe 161). "
+                 "Se l'errore sui correlatori e alto anche sul training, il limite e di ottimizzazione o di capacita, non di generalizzazione."))
+    extra[f"{r}_on_train"] = dict(BIG, data="datasets/n10/train.h5", block=16, ckpt=f"runs/{r}/last.pt")
+for fam, desc in FAMS.items():
+    jobs.append((f"n10_fam_{fam}", [(f"n10_fam_{fam}", f"n10_fam_{fam}", "training solo su questa famiglia", False),
+                                    ("n10_mix_roll", f"n10_mix_roll_on_{fam}", "training su 6 famiglie", True)],
+                 f"n10: modello di una sola famiglia contro modello su 6 famiglie, test su {desc} (HPC)",
+                 f"Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane {desc} del dataset misto; "
+                 "confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."))
+    extra[f"n10_fam_{fam}"] = dict(base=["persistence", "dmd", "dmd4"], block=16, data=f"datasets/n10mix/test_{fam}.h5")
 os.environ.setdefault("HBICP_DMD_LIB", os.path.abspath("datasets/n10sets/dmd_lib.npy"))
 for name, keep, label, notes in jobs:
     marker = f"results/{name}/.published"

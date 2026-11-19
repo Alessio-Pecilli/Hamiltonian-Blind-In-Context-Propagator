@@ -130,3 +130,15 @@ def test_anchor_range(tiny_h5):
         assert a[0] == T
         assert all((8 <= x < T) or (T <= 8 and x == T) for x in a[1:])
         assert it["t0"] + T + 4 < ds.L
+
+
+def test_split_family(tmp_path):
+    from data.generate import generate_file
+    from tools.split_family import split_family
+    src, dst = str(tmp_path / "mix.h5"), str(tmp_path / "xxz.h5")
+    generate_file(src, n=4, ntraj=12, L=6, dt=0.1, family="mix", seed=1, verbose=False)
+    k = split_family(src, "xxz", dst)
+    with h5py.File(src) as f, h5py.File(dst) as g:
+        idx = np.flatnonzero(f["fam"][()] == b"xxz")
+        assert k == len(idx) == len(g["node"]) and set(g["fam"][()]) == {b"xxz"}
+        assert np.array_equal(g["edge"][()], f["edge"][()][idx]) and np.array_equal(g["J"][()], f["J"][()][idx])

@@ -29,6 +29,10 @@
 #   M  n10_mix_roll   as S, trained on six families of Hamiltonians mixed (tfim, xxz, heisenberg, lr_ising and the open
 #      chains of the older project; 2000 each), tested on the mixed test set and on each family; the TFIM-only model
 #      of S (n10_small_roll) is evaluated on the same files, and the mixed model on the TFIM test of S.
+#   T  n10_small_roll and n10_small_roll_we4 evaluated on 500 TRAINING trajectories (T up to 64): train vs test error,
+#      on the correlators above all (optimisation/capacity limit if the train error is as high as the test one).
+#   Y  n10_fam_<family>: as M, but one model per family, trained on that family only (its 2000 Hamiltonians from the
+#      mixed file) and tested on it; compared with the mixed model of M on the same test files.
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -43,10 +47,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}; STEPS_Y=${STEPS_Y:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}; STEPS_Y=${STEPS_Y:-40000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -225,6 +229,26 @@ for s in $STAGES; do
         reeval n10_small_roll n10_small_roll_on_mix datasets/n10mix/test.h5 "8 16 32 64 128" ""
         for f in $FAMS; do reeval n10_small_roll n10_small_roll_on_$f datasets/n10mix/test_$f.h5 "8 16 32 64 128" ""; done
       fi
+      EVX=() ;;
+    T)
+      n10data || { fail "n10 datasets"; continue; }
+      EVX=(--block 16 --max_traj 500)   # train trajectories are 161 long: T up to 64 with H=64
+      for r in n10_small_roll n10_small_roll_we4; do
+        reeval $r ${r}_on_train datasets/n10/train.h5 "8 16 32 64" "persistence dmd dmd4"
+      done
+      EVX=() ;;
+    Y)
+      if [ "${SMOKE:-0}" = 1 ]; then [ -f datasets/n10mix/.ok ] || { fail "Y needs the mix data (run M first)"; continue; }
+      else make_data mix datasets/n10mix "$W" || { fail "n10mix datasets"; continue; }; fi
+      for f in tfim xxz heisenberg lr_ising chain chain_dis; do
+        for sp in train val; do
+          o=datasets/n10fam/$f/$sp.h5
+          [ -f $o ] || { mkdir -p ${o%/*} && python -m tools.split_family datasets/n10mix/$sp.h5 $f $o.tmp && mv $o.tmp $o; } || { fail "split $f $sp"; continue 2; }
+        done
+        EVX=(--block 16)
+        stage n10_fam_$f hpc "$STEPS_Y" datasets/n10mix/test_$f.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}" \
+          train.H=16 train.rollout_blocks=4 train.T_max=96 data.train=datasets/n10fam/$f/train.h5 data.val=datasets/n10fam/$f/val.h5 data.test=datasets/n10mix/test_$f.h5
+      done
       EVX=() ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
