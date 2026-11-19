@@ -37,6 +37,9 @@
 #      and every window predicted with the MEAN generator of its group (train.group=4), at test too (--group K): tested
 #      on 20 new Hamiltonians x 25 states (datasets/n10sets/test.h5) with K = 1, 2, 4, 8 trajectories per group; the
 #      pair model of Q without pooling (n10_grp_base) evaluated the same way (pooling at test time only).
+#   O  n10_overfit_small / _wide: one fixed batch of 32 windows, 10000 steps (train.py --overfit), small and large model:
+#      relative error of single-qubit and pair terms on that batch (rel_n, rel_e in train.log). Not reaching low rel_e on
+#      one batch means the read-out of the correlators cannot represent them (capacity/structure), not an optimisation issue.
 # A fair-HL baseline (CPU) runs in the background next to A/B/C.
 set -o pipefail
 cd "$(dirname "$0")/../.."
@@ -51,10 +54,10 @@ RES=(model.residual=true)
 SMALL=(model.d=128 model.de=32 model.nh=4 model.L=3 model.m=32 model.K=32)
 WIDE=(model.d=256 model.de=64 model.nh=8 model.L=6 model.m=64 model.K=64)
 if [ "${SMOKE:-0}" = 1 ]; then
-  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}; STEPS_Y=${STEPS_Y:-10}; STEPS_Z=${STEPS_Z:-10}
+  MAIL=""; STEPS_A=${STEPS_A:-20}; STEPS_B=${STEPS_B:-30}; STEPS_C=${STEPS_C:-10}; STEPS_D=${STEPS_D:-10}; STEPS_E=${STEPS_E:-10}; STEPS_F=${STEPS_F:-10}; STEPS_V=${STEPS_V:-10}; STEPS_S=${STEPS_S:-10}; STEPS_P=${STEPS_P:-10}; STEPS_M=${STEPS_M:-10}; STEPS_W=${STEPS_W:-10}; STEPS_Q=${STEPS_Q:-10}; STEPS_Y=${STEPS_Y:-10}; STEPS_Z=${STEPS_Z:-10}; STEPS_O=${STEPS_O:-10}
   CK=(train.ckpt_every=10 train.eval_every=1000000 train.batch_size=2 train.T_max=32 train.H=8); EV=(--max_traj 2 --batch_size 2); HL_N=1; HL_T="16"
 else
-  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}; STEPS_Y=${STEPS_Y:-40000}; STEPS_Z=${STEPS_Z:-40000}
+  STEPS_A=${STEPS_A:-20000}; STEPS_B=${STEPS_B:-60000}; STEPS_C=${STEPS_C:-40000}; STEPS_D=${STEPS_D:-40000}; STEPS_E=${STEPS_E:-40000}; STEPS_F=${STEPS_F:-40000}; STEPS_V=${STEPS_V:-40000}; STEPS_S=${STEPS_S:-40000}; STEPS_P=${STEPS_P:-40000}; STEPS_M=${STEPS_M:-40000}; STEPS_W=${STEPS_W:-40000}; STEPS_Q=${STEPS_Q:-40000}; STEPS_Y=${STEPS_Y:-40000}; STEPS_Z=${STEPS_Z:-40000}; STEPS_O=${STEPS_O:-10000}
   CK=(); EV=(); HL_N=${HL_N:-20}; HL_T="16 32 64"
 fi
 
@@ -267,6 +270,15 @@ for s in $STAGES; do
         for k in 2 4 8; do EVX=(--block 16 --group $k); reeval $r ${r}_k$k datasets/n10sets/test.h5 "8 16 32 64 128" ""; done
       done
       EVX=() ;;
+    O)
+      n10data || { fail "n10 datasets"; continue; }
+      for v in small wide; do   # one fixed batch of 32 windows: can the model fit the correlators at all?
+        d=runs/n10_overfit_$v; grep -q "overfit check" $d/train.log 2>/dev/null && continue; mkdir -p $d
+        [ $v = small ] && M=("${SMALL[@]}") || M=("${WIDE[@]}")
+        python train.py --preset hpc --overfit --set train.steps=$STEPS_O train.seed=0 train.out_dir=$d "${CK[@]}" "${RES[@]}" "${M[@]}" \r
+          train.H=16 train.T_max=96 train.log_every=100 2>&1 | tee $d/train.log
+        [ "${PIPESTATUS[0]}" -eq 0 ] || fail "overfit $v"
+      done ;;
     E)
       gen12 || { fail "n12 datasets"; continue; }
       stage n12_small hpc "$STEPS_E" datasets/n12/test.h5 "8 16 32 64 128" "persistence dmd dmd4" "${RES[@]}" "${SMALL[@]}"         data.train=datasets/n12/train.h5 data.val=datasets/n12/val.h5 data.test=datasets/n12/test.h5 ;;

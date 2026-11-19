@@ -184,7 +184,7 @@ def main():
                 logger.log(step, logs)
                 print(f"step {step:7d}  loss {logs['loss']:.3e}  pred {logs['pred']:.3e}  "
                       f"phys {logs['phys']:.2e}  probe {logs['probe']:.3f}  "
-                      f"S_F {logs.get('S_F', 0):.3f}  lr {logs['lr']:.2e}"
+                      f"S_F {logs.get('S_F', 0):.3f}  rel_n {logs['rel_n']:.3f}  rel_e {logs['rel_e']:.3f}  lr {logs['lr']:.2e}"
                       + (f"  swap {logs['swap']:.3e}  G_mis {logs['G_mismatch']:.3f}" if "swap" in logs else ""), flush=True)
             if args.overfit and logs["pred"] < 1e-4:
                 print(f"overfit check PASSED at step {step}: L_pred = {logs['pred']:.2e}")

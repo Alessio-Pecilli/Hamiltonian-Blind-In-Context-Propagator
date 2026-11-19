@@ -111,4 +111,7 @@ def total_loss(pred: dict, batch: dict, tn, te, cfg: dict):
                 theta=l_theta.item(), **probe_logs)
     if "S_F" in pred:
         logs["S_F"] = pred["S_F"].mean().item()
+    with torch.no_grad():  # relative error of the batch, single-qubit and pair terms apart (diagnostics only)
+        logs["rel_n"] = ((pred["node"] - tn).norm() / tn.norm().clamp_min(1e-12)).item()
+        logs["rel_e"] = ((pred["edge"] - te).norm() / te.norm().clamp_min(1e-12)).item()
     return loss, logs
