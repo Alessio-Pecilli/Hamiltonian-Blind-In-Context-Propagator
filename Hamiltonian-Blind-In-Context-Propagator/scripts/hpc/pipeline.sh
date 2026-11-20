@@ -275,7 +275,7 @@ for s in $STAGES; do
       for v in small wide; do   # one fixed batch of 32 windows: can the model fit the correlators at all?
         d=runs/n10_overfit_$v; grep -q "overfit check" $d/train.log 2>/dev/null && continue; mkdir -p $d
         [ $v = small ] && M=("${SMALL[@]}") || M=("${WIDE[@]}")
-        python train.py --preset hpc --overfit --set train.steps=$STEPS_O train.seed=0 train.out_dir=$d "${CK[@]}" "${RES[@]}" "${M[@]}" \r
+        python train.py --preset hpc --overfit --set train.steps=$STEPS_O train.seed=0 train.out_dir=$d "${CK[@]}" "${RES[@]}" "${M[@]}" \
           train.H=16 train.T_max=96 train.log_every=100 2>&1 | tee $d/train.log
         [ "${PIPESTATUS[0]}" -eq 0 ] || fail "overfit $v"
       done ;;
