@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261121-095000_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
+  "latest": "runs/20261121-095116_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261121-095116_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
+      "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su Ising a lungo raggio (HPC)",
+      "generated_at": "2026-11-21T09:51:16",
+      "git_commit": "b1378455abed5d9d3f9cee473781891fee4b1e4d",
+      "notes": "Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane Ising a lungo raggio del dataset misto; confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."
+    },
     {
       "file": "runs/20261121-095000_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-heisenberg-disordinato-hpc.json",
       "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su Heisenberg disordinato (HPC)",
