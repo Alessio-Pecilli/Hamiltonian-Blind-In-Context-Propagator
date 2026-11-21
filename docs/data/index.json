@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261121-095123_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
+  "latest": "runs/20261121-095130_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261121-095130_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-con-j-disordinati-vecchio-progetto-hpc.json",
+      "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su catena TFIM con J disordinati (vecchio progetto) (HPC)",
+      "generated_at": "2026-11-21T09:51:30",
+      "git_commit": "6c840c48b2e1ee1065948ad966aab5c1dd1428af",
+      "notes": "Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane catena TFIM con J disordinati (vecchio progetto) del dataset misto; confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."
+    },
     {
       "file": "runs/20261121-095123_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
       "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su catena TFIM uniforme (vecchio progetto) (HPC)",
