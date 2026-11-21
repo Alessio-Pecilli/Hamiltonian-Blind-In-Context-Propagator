@@ -1,6 +1,13 @@
 {
-  "latest": "runs/20261121-095116_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
+  "latest": "runs/20261121-095123_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
   "exports": [
+    {
+      "file": "runs/20261121-095123_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-catena-tfim-uniforme-vecchio-progetto-hpc.json",
+      "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su catena TFIM uniforme (vecchio progetto) (HPC)",
+      "generated_at": "2026-11-21T09:51:23",
+      "git_commit": "d866a4909b2ba4d754417d7b20be030db31f4306",
+      "notes": "Modello piccolo, roll out a blocchi da 16, 40000 step, addestrato solo sulle 2000 hamiltoniane catena TFIM uniforme (vecchio progetto) del dataset misto; confrontato con il modello addestrato su tutte e sei le famiglie (stessi dati piu le altre cinque famiglie), sullo stesso test."
+    },
     {
       "file": "runs/20261121-095116_n10-modello-di-una-sola-famiglia-contro-modello-su-6-famiglie-test-su-ising-a-lungo-raggio-hpc.json",
       "label": "n10: modello di una sola famiglia contro modello su 6 famiglie, test su Ising a lungo raggio (HPC)",
